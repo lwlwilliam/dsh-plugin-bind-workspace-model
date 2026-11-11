@@ -116,7 +116,6 @@ window.__ModuleLoader__.load({
 .wbm-option:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}
 .wbm-optionCopy{flex-direction:column;flex:1;min-width:0;display:flex}
 .wbm-modelName{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:400;line-height:18px;overflow:hidden}
-.wbm-modelDescription{color:var(--dsw-alias-label-caption);text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;overflow:hidden}
 .wbm-badgedName{vertical-align:baseline;white-space:nowrap;align-items:center;gap:4px;max-width:100%;display:inline-flex}
 .wbm-badgedNameText{text-overflow:ellipsis;min-width:0;overflow:hidden}
 .wbm-badge{flex:none}
@@ -733,9 +732,6 @@ window.__ModuleLoader__.load({
                         : h('span', { className: 'wbm-tag', 'data-tone': badgeTone(model.badge?.tone) }, badge),
                     ),
                   ),
-                  model.description !== undefined && model.description !== ''
-                    ? h('span', { className: 'wbm-modelDescription' }, model.description)
-                    : null,
                 ),
                 efforts.length === 0
                   ? null
