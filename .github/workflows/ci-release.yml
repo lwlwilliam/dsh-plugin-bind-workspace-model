@@ -11,7 +11,7 @@
 #   dsh plugin --profile web add <URL>
 # 也可以在 Web GUI 的 Plugins 页面把同一个 .tgz 下载地址填进安装框。
 # 本仓库根目录就是插件包根目录，因此也可以直接安装仓库地址：
-#   dsh plugin --profile web add github:lwlwilliam/dsh-plugin-bind-workspace-model
+#   dsh plugin --profile web add github:<owner>/<repo>
 # 安装完成后刷新一次 Web 页面（新的浏览器端 bundle 在下次页面加载时生效）。
 #
 # 如果不想每个提交都产生 release，把 release job 的 `if:` 限制成 tags 触发即可，

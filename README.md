@@ -55,13 +55,13 @@ sha256sum -c dsh-plugin-bind-workspace-model-<version>-<短SHA>.tgz.sha256
 
 ### 方式 B：直接安装 GitHub 仓库
 
-仓库根目录就是插件包根目录（`package.json`、`index.js`、`client.js` 都在根上，没有构建步骤）：
+仓库根目录就是插件包根目录（仓库地址由你自己的 GitHub 仓库决定，下面的 `<owner>/<repo>` 是占位符）（`package.json`、`index.js`、`client.js` 都在根上，没有构建步骤）：
 
 ```bash
-dsh plugin --profile web add github:lwlwilliam/dsh-plugin-bind-workspace-model
+dsh plugin --profile web add github:<owner>/<repo>
 ```
 
-等价的写法是 `https://github.com/lwlwilliam/dsh-plugin-bind-workspace-model`，或把它填进
+等价的写法是 `https://github.com/<owner>/<repo>`（建好仓库后把 `<owner>/<repo>` 换成实际地址），或把它填进
 Plugins 页面的安装框。代价是每次安装/升级都走 git 拉取，版本与校验和不如 Release 包可追溯。
 
 ### 安装之后
@@ -144,7 +144,7 @@ Install from the per-commit `.tgz` on the latest `build-*` release page, or stra
 
 ```bash
 dsh plugin --profile web add <release .tgz URL>
-dsh plugin --profile web add github:lwlwilliam/dsh-plugin-bind-workspace-model
+dsh plugin --profile web add github:<owner>/<repo>
 ```
 
 Refresh the Web page once after installing so the new client bundle loads (the Host half loads
