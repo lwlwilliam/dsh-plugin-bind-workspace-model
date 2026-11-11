@@ -252,7 +252,7 @@ const dialog = findDialog(openTree)
 assert.ok(dialog !== null, 'open dialog tree carries role="dialog"')
 assert.equal(dialog.props['aria-modal'], 'true', 'dialog is modal')
 const styleNode = findStyle(openTree)
-assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-overlay'), 'dialog carries its stylesheet')
+assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-layer-2'), 'dialog carries its stylesheet')
 function findStyle(node) {
   if (node === null || typeof node !== 'object') return null
   if (node.type === 'style') return node.children?.[0] ?? null

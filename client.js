@@ -24,7 +24,7 @@ window.__ModuleLoader__.load({
     const en = {
       'menu.label': 'Default model',
       'dialog.title': 'Workspace default model',
-      'dialog.subtitle': 'New sessions in this workspace start on this model.',
+      'dialog.description': 'New sessions in this workspace start on this model.',
       'dialog.following': 'No workspace default; new sessions follow the global default ({model}).',
       'dialog.loading': 'Loading models…',
       'dialog.empty': 'No models available. Add a provider or its credentials in Settings → Models.',
@@ -35,10 +35,8 @@ window.__ModuleLoader__.load({
       'dialog.effort.auto': 'Auto (provider default)',
       'dialog.effort.autoShort': 'Auto',
       'dialog.effort.back': 'Back',
-      'dialog.clear': 'Clear workspace default',
+      'dialog.clear': 'Clear',
       'dialog.close': 'Close',
-      'dialog.current': 'Current',
-      'dialog.selected': 'Selected',
       'dialog.pending': 'Saving…',
       'toast.saved': 'Workspace default model saved',
       'toast.cleared': 'Workspace default model cleared',
@@ -46,12 +44,11 @@ window.__ModuleLoader__.load({
       'error.save': 'Could not save the workspace default model.',
       'error.unavailable': 'The workspace default model service is unavailable.',
       'provider.account': 'DeepSeek Account',
-      'badge.neutral': '',
     }
     const zh = {
       'menu.label': '默认模型',
       'dialog.title': '工作区默认模型',
-      'dialog.subtitle': '该工作区里新建的会话默认使用这个模型。',
+      'dialog.description': '该工作区里新建的会话默认使用这个模型。',
       'dialog.following': '未设置工作区默认模型；新建会话跟随全局默认（{model}）。',
       'dialog.loading': '正在加载模型…',
       'dialog.empty': '暂无可用模型。请在 设置 → 模型 中添加提供方或凭据。',
@@ -62,10 +59,8 @@ window.__ModuleLoader__.load({
       'dialog.effort.auto': 'Auto（跟随提供方默认）',
       'dialog.effort.autoShort': 'Auto',
       'dialog.effort.back': '返回',
-      'dialog.clear': '清除工作区默认模型',
+      'dialog.clear': '清除',
       'dialog.close': '关闭',
-      'dialog.current': '当前',
-      'dialog.selected': '已选择',
       'dialog.pending': '正在保存…',
       'toast.saved': '已保存工作区默认模型',
       'toast.cleared': '已清除工作区默认模型',
@@ -73,56 +68,88 @@ window.__ModuleLoader__.load({
       'error.save': '保存工作区默认模型失败。',
       'error.unavailable': '工作区默认模型服务不可用。',
       'provider.account': 'DeepSeek 账号',
-      'badge.neutral': '',
     }
 
     // ---------------------------------------------------------------------
-    // 样式：只使用主题 token 取色，形状/间距与宿主菜单保持一致。
+    // 样式。
+    //
+    // 取值来自宿主自己的设计语言：Modal 壳、Menu 列表项、Button、Tag 的
+    // CSS 规则（从装好的 DSH 前端产物里抄来后仅改前缀），因此颜色、圆角、
+    // 阴影、字号、间距、hover 反馈与官方对话框完全同源；颜色一律走
+    // `--dsw-*` / `--dsh-*` 主题变量，不写死色值。
     // ---------------------------------------------------------------------
     const CSS = `
-.wbm-overlay{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:24px;pointer-events:auto;background:color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent)}
-.wbm-panel{box-sizing:border-box;display:flex;flex-direction:column;width:min(520px, calc(100vw - 32px));max-height:min(640px, calc(100vh - 48px));overflow:hidden;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:var(--dsw-alias-bg-overlay);color:var(--dsw-alias-label-primary);box-shadow:0 16px 48px color-mix(in srgb, var(--dsw-alias-label-primary) 22%, transparent);font-size:13px;line-height:20px;outline:none}
-.wbm-header{display:flex;flex-direction:column;gap:2px;padding:14px 16px 10px;border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}
-.wbm-title{font-size:14px;font-weight:600;line-height:20px}
-.wbm-sub{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-path{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
-.wbm-searchRow{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.wbm-search{flex:1;min-width:0;height:28px;padding:0 8px;border:none;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;outline:none}
-.wbm-search::placeholder{color:var(--dsw-alias-label-secondary)}
-.wbm-searchRow:focus-within{background:color-mix(in srgb, var(--dsw-alias-bg-layer-2) 60%, transparent)}
-.wbm-clearSearch{flex:none;width:22px;height:22px;display:grid;place-items:center;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:0}
-.wbm-clearSearch:hover{background:var(--dsw-alias-bg-layer-2)}
-.wbm-body{min-height:0;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:2px}
-.wbm-group{position:sticky;top:-6px;display:flex;align-items:center;gap:6px;padding:8px 8px 4px;color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;background:var(--dsw-alias-bg-overlay)}
-.wbm-row{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:5px 8px;border:none;border-radius:8px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer;outline:none}
-.wbm-row:hover:not(:disabled),.wbm-row:focus-visible{background:var(--dsw-alias-bg-layer-2)}
-.wbm-row:disabled{color:var(--dsw-alias-label-secondary);cursor:default;opacity:.6}
-.wbm-rowActive{background:var(--dsw-alias-bg-layer-2)}
-.wbm-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.wbm-name{display:flex;align-items:center;gap:5px;min-width:0;font-size:13px;line-height:18px}
-.wbm-nameText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-desc{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-effort{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-check{flex:0 0 16px;width:16px;height:16px;display:grid;place-items:center;color:var(--dsw-alias-brand-primary)}
-.wbm-chevron{flex:0 0 14px;width:14px;height:14px;color:var(--dsw-alias-label-secondary)}
-.wbm-badge{flex:none;display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:5px;font-size:10px;line-height:16px;font-weight:500;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
-.wbm-badge-brand{color:var(--dsw-alias-brand-primary)}
-.wbm-badge-success{color:var(--dsw-alias-state-success-primary)}
-.wbm-badge-warn{color:var(--dsw-alias-state-warn-primary)}
-.wbm-badge-error{color:var(--dsw-alias-state-error-primary)}
-.wbm-empty{padding:18px 12px;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:center}
-.wbm-error{margin:8px 12px;padding:7px 9px;border-radius:8px;font-size:11px;line-height:16px;color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent)}
-.wbm-footer{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-top:1px solid var(--dsw-alias-border-l1)}
-.wbm-footerNote{flex:1;min-width:0;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-button{flex:none;height:28px;padding:0 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer;outline:none}
-.wbm-button:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2)}
-.wbm-button:disabled{opacity:.5;cursor:default}
-.wbm-buttonDanger{color:var(--dsw-alias-state-error-primary);border-color:transparent;background:transparent}
-.wbm-buttonDanger:hover:not(:disabled){background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent)}
-.wbm-buttonPrimary{border-color:transparent;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
-.wbm-spinner{width:14px;height:14px;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-brand-primary);animation:wbm-spin .8s linear infinite}
+/* 官方 Modal 壳（ui-primitives Modal） */
+.wbm-root{pointer-events:auto;position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:max(24px,var(--dsh-frame-overlay-top, 24px)) 24px}
+.wbm-mask{position:absolute;inset:var(--dsh-frame-chrome-top, 0px) 0 0;backdrop-filter:var(--dsw-mask-blur)}
+.wbm-mask:after{content:"";position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1);animation:wbm-modal-enter var(--ds-transition-duration) var(--ds-ease-in-out)}
+@keyframes wbm-modal-enter{0%{opacity:0}to{opacity:1}}
+.wbm-dialog{box-sizing:border-box;position:relative;z-index:1;display:flex;flex-direction:column;width:min(440px,100%);max-height:100%;overflow:hidden;border:0;border-radius:var(--dsw-radius-panel);background:var(--dsw-alias-bg-layer-2);box-shadow:var(--dsw-elevation-prominent);animation:wbm-modal-enter var(--ds-transition-duration) var(--ds-ease-in-out);outline:none}
+.wbm-dialog:focus{outline:none}
+.wbm-content{display:flex;flex-direction:column;width:100%;min-height:0}
+.wbm-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:22px 14px 12px 24px}
+.wbm-title{margin:0;font-size:16px;line-height:24px;font-weight:500;color:var(--dsw-alias-label-primary)}
+.wbm-close{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:var(--dsw-radius-sm);background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);padding:0}
+@media(hover:hover){.wbm-close:hover{background:var(--dsw-alias-interactive-bg-hover)}}
+.wbm-close:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));outline-offset:2px}
+.wbm-description{margin:0;padding:0 24px;font-size:14px;line-height:22px;font-weight:400;color:var(--dsw-alias-label-primary)}
+.wbm-path{margin-top:2px;padding:0 24px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbm-body{display:flex;flex:1 1 auto;flex-direction:column;min-width:0;min-height:0;margin-top:20px;padding:0 24px}
+/* 官方模型菜单的搜索行 */
+.wbm-searchRow{flex:none;position:relative;margin:2px 0 3px}
+.wbm-search{box-sizing:border-box;width:100%;border-radius:var(--dsw-radius-md);background:0 0;border:0 solid #0000;height:auto;padding:5px 7px;display:flex;color:inherit;font:inherit;font-size:12px;line-height:normal;outline:none}
+.wbm-search::placeholder{color:var(--dsw-alias-label-caption)}
+.wbm-searchWithQuery{padding-right:34px}
+.wbm-searchClear{corner-shape:round;width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:50%;justify-content:center;align-items:center;padding:0;display:inline-flex;position:absolute;top:50%;right:4px;transform:translateY(-50%)}
+.wbm-searchClear:focus-visible{background:var(--dsw-alias-interactive-bg-hover);outline:none}
+@media(hover:hover){.wbm-searchClear:hover{background:var(--dsw-alias-interactive-bg-hover)}}
+/* 官方 Menu 列表 */
+.wbm-list{display:flex;flex:0 1 auto;flex-direction:column;min-height:0;overflow-y:auto;padding:4px 0;overscroll-behavior:contain;--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2)}
+.wbm-group{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dsw-alias-bg-layer-2);font-size:11px;line-height:15px;color:var(--dsw-alias-label-tertiary)}
+.wbm-groupTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbm-groupAction{flex:none;height:22px;padding:0 6px;border:none;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;display:inline-flex;align-items:center;gap:3px;font:inherit;font-size:11px;line-height:15px}
+@media(hover:hover){.wbm-groupAction:hover{background:var(--dsw-alias-interactive-bg-hover)}}
+/* 官方模型菜单的选项行 */
+.wbm-option{box-sizing:border-box;border-radius:var(--dsw-radius-md);width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;outline:none;align-items:center;gap:6px;padding:5px 7px;display:flex}
+.wbm-option:focus-visible,.wbm-optionActive:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+@media(hover:hover){.wbm-option:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}}
+.wbm-option:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}
+.wbm-optionCopy{flex-direction:column;flex:1;min-width:0;display:flex}
+.wbm-modelName{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:400;line-height:18px;overflow:hidden}
+.wbm-modelDescription{color:var(--dsw-alias-label-caption);text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;overflow:hidden}
+.wbm-badgedName{vertical-align:baseline;white-space:nowrap;align-items:center;gap:4px;max-width:100%;display:inline-flex}
+.wbm-badgedNameText{text-overflow:ellipsis;min-width:0;overflow:hidden}
+.wbm-badge{flex:none}
+.wbm-effort{flex:none;max-width:40%;color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbm-check{color:var(--dsw-alias-label-primary);flex:0 0 14px;place-items:center;display:grid}
+.wbm-check svg{width:14px;height:14px}
+.wbm-chevron{width:14px;height:14px;color:var(--dsw-alias-menu-icon);flex:none}
+/* 官方 Tag 角标 */
+.wbm-tag{display:inline-flex;align-items:center;border-radius:999px;corner-shape:round;padding:1px 8px;font-size:11px;line-height:17px;font-weight:500;white-space:nowrap}
+.wbm-tag[data-tone=neutral]{background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary)}
+.wbm-tag[data-tone=quiet]{color:var(--dsw-alias-label-tertiary)}
+.wbm-tag[data-tone=info]{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%,transparent);color:var(--dsw-alias-state-business-primary)}
+.wbm-tag[data-tone=success]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 10%,transparent);color:var(--dsw-alias-state-success-primary)}
+.wbm-tag[data-tone=warning]{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 12%,transparent);color:var(--dsw-alias-state-warn-primary)}
+.wbm-tag[data-tone=danger]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);color:var(--dsw-alias-state-error-primary)}
+/* 状态与错误 */
+.wbm-status,.wbm-empty{color:var(--dsw-alias-label-tertiary);padding:8px;font-size:12px;line-height:18px}
+.wbm-status{display:flex;align-items:center;gap:8px}
+.wbm-error{border-radius:var(--dsw-radius-md);background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);align-items:flex-start;gap:6px;margin:4px 0;padding:6px 7px;font-size:11px;line-height:16px;display:flex}
+/* 官方 Button */
+.wbm-footer{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:20px 24px 24px}
+.wbm-footerNote{flex:1;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbm-button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:none;border-radius:var(--dsw-radius-sm);cursor:pointer;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:transparent;height:28px;padding:0 10px;font-family:inherit}
+.wbm-button:disabled{cursor:not-allowed;opacity:.4}
+.wbm-buttonPrimary{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)}
+@media(hover:hover){.wbm-buttonPrimary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}}
+.wbm-buttonGhost:active:not(:disabled){background:var(--dsw-alias-interactive-bg-active)}
+@media(hover:hover){.wbm-buttonGhost:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}}
+.wbm-buttonDanger{color:var(--dsw-alias-state-error-primary)}
+@media(hover:hover){.wbm-buttonDanger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger)}}
+.wbm-spinner{width:14px;height:14px;border-radius:50%;border:2px solid var(--dsw-alias-border-l3);border-top-color:var(--dsw-alias-brand-primary);animation:wbm-spin .8s linear infinite}
 @keyframes wbm-spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion: reduce){.wbm-spinner{animation:none}}
+@media(prefers-reduced-motion:reduce){.wbm-mask:after,.wbm-dialog{animation:none}.wbm-spinner{animation:none}}
 `
 
     // ---------------------------------------------------------------------
@@ -216,36 +243,21 @@ window.__ModuleLoader__.load({
       return ''
     }
 
-    /** 角标色调 → 类名。 */
-    function badgeToneClass(tone) {
-      if (tone === 'success') return ' wbm-badge-success'
-      if (tone === 'warning') return ' wbm-badge-warn'
-      if (tone === 'danger' || tone === 'error') return ' wbm-badge-error'
-      if (tone === 'brand' || tone === 'info') return ' wbm-badge-brand'
-      return ''
-    }
-
-    /** 展开控件图标。 */
-    function ChevronIcon(props) {
-      return h(
-        'svg',
-        { className: props.className, viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true },
-        h('path', {
-          d: 'M5.5 6.5 8 9l2.5-2.5',
-          fill: 'none',
-          stroke: 'currentColor',
-          strokeWidth: 1.4,
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-        }),
-      )
+    /** 角标色调 → 官方 Tag 的 data-tone。 */
+    function badgeTone(tone) {
+      if (tone === 'success') return 'success'
+      if (tone === 'warning') return 'warning'
+      if (tone === 'danger' || tone === 'error') return 'danger'
+      if (tone === 'info' || tone === 'brand') return 'info'
+      if (tone === 'neutral') return 'neutral'
+      return 'quiet'
     }
 
     /** 勾选图标。 */
-    function CheckIcon(props) {
+    function CheckIcon() {
       return h(
         'svg',
-        { className: props.className, viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true },
+        { viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true },
         h('path', {
           d: 'M3.5 8.5 6.5 11.5 12.5 4.5',
           fill: 'none',
@@ -257,18 +269,49 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 返回箭头图标。 */
-    function BackIcon() {
+    /** 下钻箭头。 */
+    function ChevronIcon() {
       return h(
         'svg',
-        { viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true },
+        { className: 'wbm-chevron', viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true },
         h('path', {
-          d: 'M9.5 4.5 6 8l3.5 3.5',
+          d: 'm6 3.5 4.5 4.5L6 12.5',
           fill: 'none',
           stroke: 'currentColor',
           strokeWidth: 1.4,
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
+        }),
+      )
+    }
+
+    /** 返回箭头。 */
+    function BackIcon() {
+      return h(
+        'svg',
+        { viewBox: '0 0 16 16', width: 12, height: 12, 'aria-hidden': true },
+        h('path', {
+          d: 'M10 3.5 5.5 8l4.5 4.5',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.4,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+        }),
+      )
+    }
+
+    /** 关闭图标。 */
+    function CloseIcon() {
+      return h(
+        'svg',
+        { viewBox: '0 0 16 16', width: 16, height: 16, 'aria-hidden': true },
+        h('path', {
+          d: 'm4 4 8 8M12 4l-8 8',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.4,
+          strokeLinecap: 'round',
         }),
       )
     }
@@ -324,8 +367,9 @@ window.__ModuleLoader__.load({
     /**
      * 工作区默认模型选择对话框。
      *
-     * 结构与宿主模型选择器一致：按 provider 分组的模型列表，带推理强度下钻，
-     * 选中即保存（澄清：工作区级默认值不需要“保存”步骤，选中即生效）。
+     * 视觉与官方 Modal（ui-primitives Modal）+ 模型菜单（ui-model-selection）
+     * 同一套规则：Modal 壳负责遮罩/圆角/阴影/标题/页脚，列表复用官方 Menu
+     * 的 34px 选项行、11px 分组标题、Tag 角标与搜索行。选中即保存。
      */
     function DialogView(props) {
       const { store, t, notify } = props
@@ -385,10 +429,12 @@ window.__ModuleLoader__.load({
       const data = state.data
       const groups = React.useMemo(() => {
         if (data === null || data.catalog === null || !Array.isArray(data.catalog.groups)) return []
-        return orderGroups(data.catalog.groups).map((group) => ({
-          ...group,
-          models: rankModels(Array.isArray(group.models) ? group.models : [], query),
-        })).filter((group) => group.models.length > 0)
+        return orderGroups(data.catalog.groups)
+          .map((group) => ({
+            ...group,
+            models: rankModels(Array.isArray(group.models) ? group.models : [], query),
+          }))
+          .filter((group) => group.models.length > 0)
       }, [data, query])
 
       const choices = React.useMemo(() => {
@@ -407,6 +453,15 @@ window.__ModuleLoader__.load({
       }, [data])
 
       const showSearch = totalModels > 4
+      const binding = data !== null ? data.binding : null
+      const defaults = data !== null ? data.defaults : null
+      const effortChoices = React.useMemo(() => {
+        if (pane === null) return []
+        const efforts = Array.isArray(pane.model.reasoning?.efforts) ? pane.model.reasoning.efforts : []
+        const rows = [{ key: 'auto', effort: undefined, label: t('dialog.effort.auto') }]
+        for (const effort of efforts) rows.push({ key: `effort:${effort.id}`, effort: effort.id, label: effort.name })
+        return rows
+      }, [pane, t])
 
       // 打开后把焦点放进面板；显示搜索框时优先聚焦搜索。
       React.useEffect(() => {
@@ -420,16 +475,6 @@ window.__ModuleLoader__.load({
         const panel = panelRef.current
         if (panel !== null && typeof panel.focus === 'function') panel.focus()
       }, [open, state.status, showSearch])
-
-      const binding = data !== null ? data.binding : null
-      const defaults = data !== null ? data.defaults : null
-      const effortChoices = React.useMemo(() => {
-        if (pane === null) return []
-        const efforts = Array.isArray(pane.model.reasoning?.efforts) ? pane.model.reasoning.efforts : []
-        const rows = [{ key: 'auto', effort: undefined, label: t('dialog.effort.auto') }]
-        for (const effort of efforts) rows.push({ key: `effort:${effort.id}`, effort: effort.id, label: effort.name })
-        return rows
-      }, [pane, t])
 
       /** 关闭对话框。 */
       const close = React.useCallback(() => {
@@ -452,7 +497,10 @@ window.__ModuleLoader__.load({
             if (!response.ok || body === null || body.ok !== true) {
               setState((previous) => ({
                 ...previous,
-                error: body !== null && typeof body.message === 'string' && body.message !== '' ? body.message : t('error.save'),
+                error:
+                  body !== null && typeof body.message === 'string' && body.message !== ''
+                    ? body.message
+                    : t('error.save'),
               }))
               setPending(false)
               return
@@ -483,9 +531,6 @@ window.__ModuleLoader__.load({
         [pending, save],
       )
 
-      /** 当前语言下的模型显示名。 */
-      const displayName = React.useCallback((group, model) => model.name || model.id, [])
-
       /** 当前推理强度行是否即为已保存选择。 */
       const effortSelected = React.useCallback(
         (effort) => {
@@ -497,6 +542,13 @@ window.__ModuleLoader__.load({
         },
         [binding, pane],
       )
+
+      /** 把推理强度行转换成选择。 */
+      const rowSelection = (row) => {
+        const selection = { provider: pane.group.id, model: pane.model.id }
+        if (row.effort !== undefined) selection.reasoningEffort = row.effort
+        return selection
+      }
 
       /** 键盘：上下移动高亮，Enter 激活，Escape/退格退回或关闭。 */
       const onKeyDown = (event) => {
@@ -540,99 +592,111 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** 把推理强度行转换成选择。 */
-      const rowSelection = (row) => {
-        const selection = { provider: pane.group.id, model: pane.model.id }
-        if (row.effort !== undefined) selection.reasoningEffort = row.effort
-        return selection
-      }
-
       // 高亮行滚动进视野。
       React.useEffect(() => {
         const list = listRef.current
         if (list === null) return
         const row = list.querySelector(`[data-wbm-index="${activeIndex}"]`)
-        if (row !== null && typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' })
+        if (row !== null && typeof row.scrollIntoView === 'function') {
+          row.scrollIntoView({ block: 'nearest' })
+        }
       }, [activeIndex, pane, groups.length])
 
       if (!open) return null
 
-      /** 顶部标题与副标题。 */
-      const title = h('div', { className: 'wbm-title' }, t('dialog.title'))
+      /** 顶部标题、说明与工作区路径。 */
+      const header = h(
+        'div',
+        { className: 'wbm-header' },
+        h('h2', { className: 'wbm-title' }, t('dialog.title')),
+        h(
+          'button',
+          { type: 'button', className: 'wbm-close', 'aria-label': t('dialog.close'), title: t('dialog.close'), onClick: close },
+          h(CloseIcon, null),
+        ),
+      )
       const subtitle =
         target.displayTitle !== undefined && target.displayTitle !== ''
           ? target.displayTitle
           : target.path
+      const description = h('div', { className: 'wbm-description' }, t('dialog.description'))
+      const pathLine = h('div', { className: 'wbm-path', title: target.path }, subtitle)
 
       /** 列表区。 */
-      let body = null
       let index = -1
+      let list = null
+      let toolbar = null
       if (state.status === 'loading') {
-        body = h(
+        list = h(
           'div',
-          { className: 'wbm-empty', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 } },
+          { className: 'wbm-status' },
           h('span', { className: 'wbm-spinner' }),
           h('span', null, t('dialog.loading')),
         )
       } else if (state.status === 'error') {
-        body = h('div', { className: 'wbm-empty' }, state.error ?? t('error.load'))
+        list = h('div', { className: 'wbm-empty' }, state.error ?? t('error.load'))
       } else if (data !== null && totalModels === 0) {
-        body = h('div', { className: 'wbm-empty' }, t('dialog.empty'))
+        list = h('div', { className: 'wbm-empty' }, t('dialog.empty'))
       } else if (pane !== null) {
-        body = h(
-          'div',
-          { className: 'wbm-body', ref: listRef, role: 'menu', 'aria-label': t('dialog.effort.title', { model: displayName(pane.group, pane.model) }) },
-          h(
-            'div',
-            { className: 'wbm-group' },
+        const efforts = effortChoices.map((row, rowIndex) => {
+          const selected = effortSelected(row.effort)
+          return h(
+            'button',
+            {
+              key: row.key,
+              type: 'button',
+              role: 'menuitemradio',
+              'aria-checked': selected,
+              'data-wbm-index': rowIndex,
+              className: 'wbm-option' + (rowIndex === activeIndex ? ' wbm-optionActive' : ''),
+              disabled: pending,
+              onClick: () => {
+                void save(rowSelection(row))
+              },
+            },
             h(
-              'button',
-              {
-                type: 'button',
-                className: 'wbm-button',
-                onClick: () => {
-                  setPane(null)
-                  setActiveIndex(0)
-                },
-                disabled: pending,
-              },
-              h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } }, h(BackIcon, null), t('dialog.effort.back')),
+              'span',
+              { className: 'wbm-optionCopy' },
+              h('span', { className: 'wbm-modelName' }, row.label),
             ),
-            h('span', { style: { marginLeft: 4, textTransform: 'none' } }, t('dialog.effort.title', { model: displayName(pane.group, pane.model) })),
-          ),
-          ...effortChoices.map((row, rowIndex) => {
-            index = rowIndex
-            const selected = effortSelected(row.effort)
-            return h(
-              'button',
-              {
-                key: row.key,
-                type: 'button',
-                role: 'menuitemradio',
-                'aria-checked': selected,
-                'data-wbm-index': rowIndex,
-                className: 'wbm-row' + (rowIndex === activeIndex ? ' wbm-rowActive' : ''),
-                disabled: pending,
-                onClick: () => {
-                  void save(rowSelection(row))
-                },
+            selected ? h(CheckIcon, null) : null,
+          )
+        })
+        list = h(
+          'div',
+          { className: 'wbm-list', ref: listRef, role: 'menu', 'aria-label': t('dialog.effort.title', { model: pane.model.name }) },
+          ...efforts,
+        )
+        toolbar = h(
+          'div',
+          { className: 'wbm-group' },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'wbm-groupAction',
+              disabled: pending,
+              onClick: () => {
+                setPane(null)
+                setActiveIndex(0)
               },
-              h('span', { className: 'wbm-copy' }, h('span', { className: 'wbm-name' }, h('span', { className: 'wbm-nameText' }, row.label))),
-              selected ? h(CheckIcon, { className: 'wbm-check' }) : null,
-            )
-          }),
+            },
+            h(BackIcon, null),
+            t('dialog.effort.back'),
+          ),
+          h('span', { className: 'wbm-groupTitle' }, t('dialog.effort.title', { model: pane.model.name })),
         )
       } else {
-        body = h(
+        list = h(
           'div',
-          { className: 'wbm-body', ref: listRef, role: 'menu', 'aria-label': t('dialog.title') },
+          { className: 'wbm-list', ref: listRef, role: 'menu', 'aria-label': t('dialog.title') },
           ...groups.flatMap((group) => {
             const heading = h(
               'div',
               { className: 'wbm-group', key: `group:${group.id}` },
-              group.id === 'deepseek-account' ? t('provider.account') : group.name,
+              h('span', { className: 'wbm-groupTitle' }, group.id === 'deepseek-account' ? t('provider.account') : group.name),
             )
-            const rows = group.models.map((model) => {
+            const optionRows = group.models.map((model) => {
               index += 1
               const rowIndex = index
               const selected = sameModel(binding, group.id, model.id)
@@ -650,47 +714,92 @@ window.__ModuleLoader__.load({
                   role: 'menuitemradio',
                   'aria-checked': selected,
                   'data-wbm-index': rowIndex,
-                  className: 'wbm-row' + (rowIndex === activeIndex ? ' wbm-rowActive' : ''),
+                  className: 'wbm-option' + (rowIndex === activeIndex ? ' wbm-optionActive' : ''),
                   disabled: pending,
                   onClick: () => chooseModel(group, model),
                 },
                 h(
                   'span',
-                  { className: 'wbm-copy' },
+                  { className: 'wbm-optionCopy' },
                   h(
                     'span',
-                    { className: 'wbm-name' },
-                    h('span', { className: 'wbm-nameText' }, model.name),
-                    badge === ''
-                      ? null
-                      : h('span', { className: 'wbm-badge' + badgeToneClass(model.badge?.tone) }, badge),
+                    { className: 'wbm-modelName' },
+                    h(
+                      'span',
+                      { className: 'wbm-badgedName' },
+                      h('span', { className: 'wbm-badgedNameText' }, model.name),
+                      badge === ''
+                        ? null
+                        : h('span', { className: 'wbm-tag', 'data-tone': badgeTone(model.badge?.tone) }, badge),
+                    ),
                   ),
                   model.description !== undefined && model.description !== ''
-                    ? h('span', { className: 'wbm-desc' }, model.description)
+                    ? h('span', { className: 'wbm-modelDescription' }, model.description)
                     : null,
                 ),
                 efforts.length === 0
                   ? null
-                  : h(
-                      'span',
-                      { className: 'wbm-effort' },
-                      currentEffort !== undefined
-                        ? currentEffort
-                        : t('dialog.effort.autoShort'),
-                    ),
-                selected ? h(CheckIcon, { className: 'wbm-check' }) : h(ChevronIcon, { className: 'wbm-chevron' }),
+                  : h('span', { className: 'wbm-effort' }, currentEffort ?? t('dialog.effort.autoShort')),
+                selected ? h(CheckIcon, null) : h(ChevronIcon, null),
               )
             })
-            return [heading, ...rows]
+            return [heading, ...optionRows]
           }),
         )
       }
 
-      /** 页脚：清除按钮 + 关闭按钮 / 当前跟随的全局默认说明。 */
+      /** 搜索行（只有模型多时才出现，与官方模型菜单一致）。 */
+      const searchRow =
+        state.status === 'ready' && showSearch && pane === null
+          ? h(
+              'div',
+              { className: 'wbm-searchRow' },
+              h('input', {
+                className: 'wbm-search' + (query === '' ? '' : ' wbm-searchWithQuery'),
+                type: 'search',
+                value: query,
+                placeholder: t('dialog.search'),
+                'aria-label': t('dialog.search'),
+                ref: searchRef,
+                onChange: (event) => {
+                  setQuery(event.target.value)
+                  setActiveIndex(0)
+                },
+              }),
+              query === ''
+                ? null
+                : h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'wbm-searchClear',
+                      'aria-label': t('dialog.clearSearch'),
+                      title: t('dialog.clearSearch'),
+                      onClick: () => {
+                        setQuery('')
+                        setActiveIndex(0)
+                      },
+                    },
+                    h(CloseIcon, null),
+                  ),
+            )
+          : null
+
+      /** 错误与提供方失败提示。 */
+      const errors = []
+      if (state.status === 'ready' && data !== null && Array.isArray(data.catalog.failures) && data.catalog.failures.length > 0) {
+        errors.push(
+          h('div', { className: 'wbm-error', key: 'catalog-failures' }, t('dialog.failures', { count: data.catalog.failures.length })),
+        )
+      }
+      if (state.status === 'ready' && state.error !== null) {
+        errors.push(h('div', { className: 'wbm-error', key: 'save-error' }, state.error))
+      }
+
+      /** 页脚：跟随全局默认的说明 + 清除 + 关闭。 */
       let footerNote = null
       if (defaults !== null && binding === null) {
-        const defaultModel = findModelName(data, defaults.provider, defaults.model)
-        footerNote = t('dialog.following', { model: defaultModel })
+        footerNote = t('dialog.following', { model: findModelName(data, defaults.provider, defaults.model) })
       }
       const footer = h(
         'div',
@@ -701,7 +810,7 @@ window.__ModuleLoader__.load({
               'button',
               {
                 type: 'button',
-                className: 'wbm-button wbm-buttonDanger',
+                className: 'wbm-button wbm-buttonGhost wbm-buttonDanger',
                 disabled: pending,
                 onClick: () => {
                   void save(null)
@@ -712,24 +821,32 @@ window.__ModuleLoader__.load({
           : null,
         h(
           'button',
-          { type: 'button', className: 'wbm-button', disabled: pending, onClick: close },
-          pending ? h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } }, h('span', { className: 'wbm-spinner' }), t('dialog.pending')) : t('dialog.close'),
+          {
+            type: 'button',
+            className: 'wbm-button wbm-buttonPrimary',
+            disabled: pending,
+            onClick: close,
+          },
+          pending
+            ? h(
+                'span',
+                { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+                h('span', { className: 'wbm-spinner' }),
+                t('dialog.pending'),
+              )
+            : t('dialog.close'),
         ),
       )
 
       return h(
         'div',
-        {
-          className: 'wbm-overlay',
-          onMouseDown: (event) => {
-            if (event.target === event.currentTarget) close()
-          },
-        },
+        { className: 'wbm-root', role: 'presentation' },
         h('style', null, CSS),
+        h('div', { className: 'wbm-mask', 'aria-hidden': 'true', onClick: close }),
         h(
           'div',
           {
-            className: 'wbm-panel',
+            className: 'wbm-dialog',
             role: 'dialog',
             'aria-modal': 'true',
             'aria-label': t('dialog.title'),
@@ -739,53 +856,20 @@ window.__ModuleLoader__.load({
           },
           h(
             'div',
-            { className: 'wbm-header' },
-            title,
-            h('div', { className: 'wbm-sub' }, t('dialog.subtitle')),
-            h('div', { className: 'wbm-path', title: target.path }, subtitle),
+            { className: 'wbm-content' },
+            header,
+            description,
+            pathLine,
+            h(
+              'div',
+              { className: 'wbm-body' },
+              searchRow,
+              toolbar,
+              list,
+              ...errors,
+            ),
+            footer,
           ),
-          state.status === 'ready' && showSearch && pane === null
-            ? h(
-                'div',
-                { className: 'wbm-searchRow' },
-                h('input', {
-                  className: 'wbm-search',
-                  type: 'search',
-                  value: query,
-                  placeholder: t('dialog.search'),
-                  'aria-label': t('dialog.search'),
-                  ref: searchRef,
-                  onChange: (event) => {
-                    setQuery(event.target.value)
-                    setActiveIndex(0)
-                  },
-                }),
-                query === ''
-                  ? null
-                  : h(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'wbm-clearSearch',
-                        'aria-label': t('dialog.clearSearch'),
-                        title: t('dialog.clearSearch'),
-                        onClick: () => {
-                          setQuery('')
-                          setActiveIndex(0)
-                        },
-                      },
-                      '×',
-                    ),
-              )
-            : null,
-          state.status === 'ready' && data !== null && Array.isArray(data.catalog.failures) && data.catalog.failures.length > 0
-            ? h('div', { className: 'wbm-error' }, t('dialog.failures', { count: data.catalog.failures.length }))
-            : null,
-          state.status === 'ready' && state.error !== null
-            ? h('div', { className: 'wbm-error' }, state.error)
-            : null,
-          body,
-          footer,
         ),
       )
     }
