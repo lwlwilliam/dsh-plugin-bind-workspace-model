@@ -124,6 +124,7 @@ const stateResponse = {
   path: '/work/demo',
   binding: { provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' },
   bindingName: 'DeepSeek V4.1 Flash',
+  bindingProviderName: 'OpenCode Go',
   defaults: { provider: 'opencode-go', model: 'glm-5.3' },
   defaultsName: 'GLM-5.3',
   catalog: {
@@ -230,6 +231,7 @@ const actions = await menu.resolve(target, new AbortController().signal)
 assert.equal(actions.length, 1, 'menu resolves one action')
 assert.ok(actions[0].label.includes('默认模型'), 'label is localized')
 assert.ok(actions[0].label.includes('DeepSeek V4.1 Flash'), 'label shows the bound model name')
+assert.ok(actions[0].label.includes('OpenCode Go'), 'label shows the bound provider name')
 assert.deepEqual(actions[0].icon, { key: 'workspace.defaultModel' })
 const labelCall = fetchCalls.find((call) => call.url.includes('catalog=0'))
 assert.ok(labelCall !== undefined, 'menu label fetch skips the full catalog')

@@ -679,10 +679,29 @@ function createRuntime(ctx, config) {
       path: canonical,
       binding,
       bindingName: await selectionDisplayName(binding),
+      bindingProviderName: providerDisplayName(binding?.provider),
       defaults,
       defaultsName: await selectionDisplayName(defaults),
       catalog: url.searchParams.get('catalog') === '0' ? { groups: [], failures: [] } : await buildCatalog(),
     })
+  }
+
+  /**
+   * 提供方的显示名（目录里注册的名字）；查不到时退回 id。
+   * @param {string|undefined} providerId - 提供方路由。
+   * @returns {string|null}
+   */
+  function providerDisplayName(providerId) {
+    if (typeof providerId !== 'string' || providerId === '') return null
+    const llm = ctx.get('llm')
+    if (llm === undefined || typeof llm?.listProviders !== 'function') return providerId
+    try {
+      const providers = llm.listProviders()
+      const found = (Array.isArray(providers) ? providers : []).find((provider) => provider?.id === providerId)
+      return typeof found?.name === 'string' && found.name !== '' ? found.name : providerId
+    } catch {
+      return providerId
+    }
   }
 
   /**

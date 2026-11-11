@@ -23,12 +23,14 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const en = {
       'menu.label': 'Default model',
+      'menu.labelWithModel': 'Default model · {model} ({provider})',
       'dialog.title': 'Workspace default model',
       'dialog.description': 'New sessions in this workspace start on this model.',
       'dialog.following': 'No workspace default; new sessions follow the global default ({model}).',
       'dialog.loading': 'Loading models…',
       'dialog.empty': 'No models available. Add a provider or its credentials in Settings → Models.',
       'dialog.failures': '{count} provider(s) could not list models.',
+      'dialog.current': 'Current',
       'dialog.search': 'Search models',
       'dialog.clearSearch': 'Clear search',
       'dialog.effort.title': 'Reasoning effort for {model}',
@@ -47,12 +49,14 @@ window.__ModuleLoader__.load({
     }
     const zh = {
       'menu.label': '默认模型',
+      'menu.labelWithModel': '默认模型 · {model}（{provider}）',
       'dialog.title': '工作区默认模型',
       'dialog.description': '该工作区里新建的会话默认使用这个模型。',
       'dialog.following': '未设置工作区默认模型；新建会话跟随全局默认（{model}）。',
       'dialog.loading': '正在加载模型…',
       'dialog.empty': '暂无可用模型。请在 设置 → 模型 中添加提供方或凭据。',
       'dialog.failures': '有 {count} 个提供方无法列出模型。',
+      'dialog.current': '当前',
       'dialog.search': '搜索模型',
       'dialog.clearSearch': '清除搜索',
       'dialog.effort.title': '推理强度：{model}',
@@ -122,6 +126,9 @@ window.__ModuleLoader__.load({
 .wbm-effort{flex:none;max-width:40%;color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wbm-check{color:var(--dsw-alias-label-primary);flex:0 0 14px;place-items:center;display:grid}
 .wbm-check svg{width:14px;height:14px}
+.wbm-rowTrailing{flex:none;display:inline-flex;align-items:center;gap:4px}
+.wbm-optionSelected:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.wbm-optionSelected .wbm-check{color:var(--dsw-alias-brand-primary)}
 .wbm-chevron{width:14px;height:14px;color:var(--dsw-alias-menu-icon);flex:none}
 /* 官方 Tag 角标 */
 .wbm-tag{display:inline-flex;align-items:center;border-radius:999px;corner-shape:round;padding:1px 8px;font-size:11px;line-height:17px;font-weight:500;white-space:nowrap}
@@ -647,7 +654,10 @@ window.__ModuleLoader__.load({
               role: 'menuitemradio',
               'aria-checked': selected,
               'data-wbm-index': rowIndex,
-              className: 'wbm-option' + (rowIndex === activeIndex ? ' wbm-optionActive' : ''),
+              className:
+                'wbm-option' +
+                (selected ? ' wbm-optionSelected' : '') +
+                (rowIndex === activeIndex ? ' wbm-optionActive' : ''),
               disabled: pending,
               onClick: () => {
                 void save(rowSelection(row))
@@ -656,9 +666,18 @@ window.__ModuleLoader__.load({
             h(
               'span',
               { className: 'wbm-optionCopy' },
-              h('span', { className: 'wbm-modelName' }, row.label),
+              h(
+                'span',
+                { className: 'wbm-modelName' },
+                h(
+                  'span',
+                  { className: 'wbm-badgedName' },
+                  h('span', { className: 'wbm-badgedNameText' }, row.label),
+                  selected ? h('span', { className: 'wbm-tag', 'data-tone': 'info' }, t('dialog.current')) : null,
+                ),
+              ),
             ),
-            selected ? h(CheckIcon, null) : null,
+            h('span', { className: 'wbm-rowTrailing' }, selected ? h('span', { className: 'wbm-check' }, h(CheckIcon, null)) : null),
           )
         })
         list = h(
@@ -713,7 +732,10 @@ window.__ModuleLoader__.load({
                   role: 'menuitemradio',
                   'aria-checked': selected,
                   'data-wbm-index': rowIndex,
-                  className: 'wbm-option' + (rowIndex === activeIndex ? ' wbm-optionActive' : ''),
+                  className:
+                    'wbm-option' +
+                    (selected ? ' wbm-optionSelected' : '') +
+                    (rowIndex === activeIndex ? ' wbm-optionActive' : ''),
                   disabled: pending,
                   onClick: () => chooseModel(group, model),
                 },
@@ -730,13 +752,19 @@ window.__ModuleLoader__.load({
                       badge === ''
                         ? null
                         : h('span', { className: 'wbm-tag', 'data-tone': badgeTone(model.badge?.tone) }, badge),
+                      selected ? h('span', { className: 'wbm-tag', 'data-tone': 'info' }, t('dialog.current')) : null,
                     ),
                   ),
                 ),
                 efforts.length === 0
                   ? null
                   : h('span', { className: 'wbm-effort' }, currentEffort ?? t('dialog.effort.autoShort')),
-                selected ? h(CheckIcon, null) : h(ChevronIcon, null),
+                h(
+                  'span',
+                  { className: 'wbm-rowTrailing' },
+                  selected ? h('span', { className: 'wbm-check' }, h(CheckIcon, null)) : null,
+                  efforts.length === 0 ? null : h(ChevronIcon, null),
+                ),
               )
             })
             return [heading, ...optionRows]
@@ -920,11 +948,15 @@ window.__ModuleLoader__.load({
                   const body = await response.json().catch(() => null)
                   const binding = body !== null && body.ok === true ? body.binding : null
                   if (binding !== null && binding !== undefined) {
-                    const name =
+                    const model =
                       typeof body.bindingName === 'string' && body.bindingName !== ''
                         ? body.bindingName
                         : binding.model
-                    label = `${label} · ${name}`
+                    const provider =
+                      typeof body.bindingProviderName === 'string' && body.bindingProviderName !== ''
+                        ? body.bindingProviderName
+                        : binding.provider
+                    label = translate('menu.labelWithModel', { model, provider })
                   }
                 } catch {
                   /* 标签降级为纯文字，不影响菜单打开 */

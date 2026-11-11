@@ -266,6 +266,7 @@ try {
     const state = await getState(workspacePath)
     assert.deepEqual(state.body.binding, binding, 'state reflects the saved binding')
     assert.equal(state.body.bindingName, 'DeepSeek V4.1 Flash', 'binding display name is exposed')
+    assert.equal(state.body.bindingProviderName, 'OpenCode Go', 'bound provider display name is exposed')
 
     // 菜单标签只需要绑定和显示名，`catalog=0` 跳过一次完整模型目录解析。
     const lightResponse = await call(
