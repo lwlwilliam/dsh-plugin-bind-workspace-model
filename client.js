@@ -23,7 +23,8 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const en = {
       'menu.label': 'Default model',
-      'menu.labelWithModel': 'Default model · {model} ({provider})',
+      'menu.labelWithModel': 'Default model · {model}',
+      'dialog.currentDefault': 'Current default: {provider} · {model}',
       'dialog.title': 'Workspace default model',
       'dialog.description': 'New sessions in this workspace start on this model.',
       'dialog.following': 'No workspace default; new sessions follow the global default ({model}).',
@@ -49,7 +50,8 @@ window.__ModuleLoader__.load({
     }
     const zh = {
       'menu.label': '默认模型',
-      'menu.labelWithModel': '默认模型 · {model}（{provider}）',
+      'menu.labelWithModel': '默认模型 · {model}',
+      'dialog.currentDefault': '当前默认：{provider} · {model}',
       'dialog.title': '工作区默认模型',
       'dialog.description': '该工作区里新建的会话默认使用这个模型。',
       'dialog.following': '未设置工作区默认模型；新建会话跟随全局默认（{model}）。',
@@ -98,6 +100,7 @@ window.__ModuleLoader__.load({
 .wbm-close:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));outline-offset:2px}
 .wbm-description{margin:0;padding:0 24px;font-size:14px;line-height:22px;font-weight:400;color:var(--dsw-alias-label-primary)}
 .wbm-path{margin-top:2px;padding:0 24px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbm-currentDefault{margin-top:6px;padding:0 24px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wbm-body{display:flex;flex:1 1 auto;flex-direction:column;min-width:0;min-height:0;margin-top:20px;padding:0 24px}
 /* 官方模型菜单的搜索行 */
 .wbm-searchRow{flex:none;position:relative;margin:2px 0 3px}
@@ -627,6 +630,23 @@ window.__ModuleLoader__.load({
           : target.path
       const description = h('div', { className: 'wbm-description' }, t('dialog.description'))
       const pathLine = h('div', { className: 'wbm-path', title: target.path }, subtitle)
+      const currentLine =
+        data === null || data.binding === null || data.binding === undefined
+          ? null
+          : h(
+              'div',
+              { className: 'wbm-currentDefault' },
+              t('dialog.currentDefault', {
+                provider:
+                  typeof data.bindingProviderName === 'string' && data.bindingProviderName !== ''
+                    ? data.bindingProviderName
+                    : data.binding.provider,
+                model:
+                  typeof data.bindingName === 'string' && data.bindingName !== ''
+                    ? data.bindingName
+                    : data.binding.model,
+              }),
+            )
 
       /** 列表区。 */
       let index = -1
@@ -884,6 +904,7 @@ window.__ModuleLoader__.load({
             header,
             description,
             pathLine,
+            currentLine,
             h(
               'div',
               { className: 'wbm-body' },
@@ -952,11 +973,9 @@ window.__ModuleLoader__.load({
                       typeof body.bindingName === 'string' && body.bindingName !== ''
                         ? body.bindingName
                         : binding.model
-                    const provider =
-                      typeof body.bindingProviderName === 'string' && body.bindingProviderName !== ''
-                        ? body.bindingProviderName
-                        : binding.provider
-                    label = translate('menu.labelWithModel', { model, provider })
+                    // 共享菜单只接受单行纯文本：带上提供方会把弹出菜单明显撑宽，
+                    // 所以菜单只留模型名，提供方放进对话框的“当前默认”说明里。
+                    label = translate('menu.labelWithModel', { model })
                   }
                 } catch {
                   /* 标签降级为纯文字，不影响菜单打开 */

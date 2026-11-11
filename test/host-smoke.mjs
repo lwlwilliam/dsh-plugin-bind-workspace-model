@@ -14,7 +14,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../index.js'
@@ -27,6 +27,7 @@ const root = await mkdtemp(join(tmpdir(), 'dsh-wbm-'))
 process.env.DSH_HOME = root
 
 const workspacePath = '/work/demo'
+const legacyPath = '/work/legacy'
 const workspaces = new Map([
   [
     workspacePath,
@@ -39,7 +40,26 @@ const workspaces = new Map([
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
   ],
+  [
+    legacyPath,
+    {
+      id: 'ws-legacy',
+      path: legacyPath,
+      title: 'Legacy',
+      sessionIds: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ],
 ])
+
+// 插件升级前的数据格式：v1 以“规范化路径”为键。用于验证读取时迁移到工作区 id。
+await mkdir(join(root, 'workspace-default-model'), { recursive: true })
+await writeFile(
+  join(root, 'workspace-default-model', 'bindings.json'),
+  JSON.stringify({ version: 1, bindings: { [legacyPath]: { provider: 'opencode-go', model: 'glm-5.3' } } }, null, 2),
+  'utf8',
+)
 
 /** 部署默认值：测试里“未显式指定路由”的会话都用它。 */
 const deploymentDefault = { provider: 'opencode-go', model: 'glm-5.3' }
@@ -63,6 +83,9 @@ const services = {
   workspaceRegistry: {
     async resolveByPath(path) {
       return workspaces.get(path)
+    },
+    list() {
+      return [...workspaces.values()]
     },
   },
   llm: {
@@ -237,6 +260,18 @@ try {
   }
   console.log('ok 2 - GET /state returns workspace, binding, defaults and catalog')
 
+  /* 2b. 旧版“按路径”绑定在读取时迁移到工作区 id。 */
+  {
+    const legacy = await getState(legacyPath)
+    assert.deepEqual(
+      legacy.body.binding,
+      { provider: 'opencode-go', model: 'glm-5.3' },
+      'a v1 path-keyed binding is migrated on read',
+    )
+    assert.equal(legacy.body.workspace.id, 'ws-legacy')
+  }
+  console.log('ok 2b - legacy path-keyed bindings migrate to the workspace id')
+
   /* 3. 非法路径 / 非法请求体。 */
   {
     const badPath = await getState('relative/path')
@@ -260,8 +295,17 @@ try {
     assert.equal(body.ok, true)
     assert.deepEqual(body.binding, binding)
     const file = await readBindingsFile()
-    assert.equal(file.version, 1, 'file carries the format version')
-    assert.deepEqual(file.bindings[workspacePath], binding, 'binding is persisted by canonical path')
+    assert.equal(file.version, 2, 'file carries the format version')
+    assert.deepEqual(
+      file.bindings['ws-1'],
+      { path: workspacePath, ...binding },
+      'binding is persisted under the workspace id with its canonical path',
+    )
+    assert.deepEqual(
+      file.bindings['ws-legacy'],
+      { path: legacyPath, provider: 'opencode-go', model: 'glm-5.3' },
+      'the migrated legacy binding is rewritten under its workspace id',
+    )
 
     const state = await getState(workspacePath)
     assert.deepEqual(state.body.binding, binding, 'state reflects the saved binding')
@@ -374,7 +418,8 @@ try {
     assert.equal(body.binding, null)
     assert.equal(body.applied.sessions, 0)
     const file = await readBindingsFile()
-    assert.equal(Object.keys(file.bindings).length, 0, 'clearing removes the record')
+    assert.equal(file.bindings['ws-1'], undefined, 'clearing removes the workspace record')
+    assert.ok(file.bindings['ws-legacy'] !== undefined, 'other workspaces keep their bindings')
     const state = await getState(workspacePath)
     assert.equal(state.body.binding, null)
   }
@@ -391,6 +436,37 @@ try {
     assert.deepEqual(state.body.binding, binding)
   }
   console.log('ok 10 - unregistered directories round-trip by normalized path')
+
+  /* 11. 删除工作区后重建同一目录：默认模型不会沿用，旧记录在下次写入时清理。 */
+  {
+    const saved = await postBinding({ path: workspacePath, selection: binding })
+    assert.equal(saved.status, 200)
+
+    // 模拟 UI 删除工作区，再以新 id 重建同一个目录。
+    workspaces.delete(workspacePath)
+    workspaces.set(workspacePath, {
+      id: 'ws-2',
+      path: workspacePath,
+      title: 'Demo',
+      sessionIds: [],
+      createdAt: '2026-01-02T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    })
+
+    const fresh = await getState(workspacePath)
+    assert.equal(fresh.body.workspace.id, 'ws-2')
+    assert.equal(fresh.body.binding, null, 'a re-created workspace starts without a default model')
+
+    const reselected = { provider: 'opencode-go', model: 'glm-5.3' }
+    const next = await postBinding({ path: workspacePath, selection: reselected })
+    assert.equal(next.status, 200)
+    assert.deepEqual(next.body.binding, reselected)
+
+    const file = await readBindingsFile()
+    assert.equal(file.bindings['ws-1'], undefined, 'the deleted workspace record is pruned on the next write')
+    assert.deepEqual(file.bindings['ws-2'], { path: workspacePath, ...reselected })
+  }
+  console.log('ok 11 - deleting and re-creating a workspace requires choosing the default again')
 
   console.log('\nhost-smoke: all checks passed')
 } finally {

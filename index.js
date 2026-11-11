@@ -37,7 +37,7 @@ const DATA_DIR_NAME = 'workspace-default-model'
 /** 绑定文件名。 */
 const DATA_FILE_NAME = 'bindings.json'
 /** 绑定文件格式版本。 */
-const FILE_VERSION = 1
+const FILE_VERSION = 2
 /** 客户端读取/写入的精确 fetch 路由。 */
 const ROUTE_STATE = '/api/dsh-plugin-bind-workspace-model/state'
 const ROUTE_BINDING = '/api/dsh-plugin-bind-workspace-model/binding'
@@ -145,7 +145,8 @@ function createRuntime(ctx, config) {
     const text = [
       '这是 DeepSeek Harness 插件 @local/dsh-plugin-bind-workspace-model 的数据目录。',
       '',
-      `bindings.json 保存每个工作区（按规范化绝对路径）的默认模型选择：provider、model、可选 reasoningEffort。`,
+      `bindings.json 按工作区保存默认模型选择：provider、model、可选 reasoningEffort。`,
+      '工作区被删除后，它的绑定会在下一次写入时清理；重新创建同一目录的工作区需要重新选一次默认模型。',
       '删除 bindings.json 等于清空所有工作区的默认模型；之后新建的会话回到全局默认模型。',
       '卸载插件不会删除本目录，如需彻底清理请手动删除。',
       '',
@@ -166,7 +167,14 @@ function createRuntime(ctx, config) {
     return bindings
   }
 
-  /** 从磁盘读取并校验绑定表；坏文件只告警，不阻断插件。 */
+  /**
+   * 从磁盘读取并校验绑定表；坏文件只告警，不阻断插件。
+   *
+   * 文件格式 v2 以工作区 id 为键（未注册目录退化为 `path:<规范化路径>`），
+   * 这样“删除工作区后再创建同一目录”会得到新的 id，旧的默认模型不会
+   * 自动沿用，而是需要重新选择。v1 的“路径 → 选择”记录在读取时迁移。
+   * @returns {Promise<Map<string, object>>} 键 → { path, provider, model, reasoningEffort? }
+   */
   async function loadBindings() {
     let text
     try {
@@ -176,23 +184,36 @@ function createRuntime(ctx, config) {
       report('load', error)
       return new Map()
     }
+    let parsed
     try {
-      const parsed = JSON.parse(text)
-      const raw =
-        parsed !== null && typeof parsed === 'object' && parsed.bindings !== null && typeof parsed.bindings === 'object'
-          ? parsed.bindings
-          : {}
-      const map = new Map()
-      for (const [path, value] of Object.entries(raw)) {
-        if (typeof path !== 'string' || path === '' || !isAbsolute(path)) continue
-        const selection = normalizeSelection(value)
-        if (selection !== null) map.set(path, selection)
-      }
-      return map
+      parsed = JSON.parse(text)
     } catch (error) {
       report('parse', error)
       return new Map()
     }
+    const version = typeof parsed?.version === 'number' ? parsed.version : 1
+    const raw =
+      parsed !== null && typeof parsed === 'object' && parsed.bindings !== null && typeof parsed.bindings === 'object'
+        ? parsed.bindings
+        : {}
+    const map = new Map()
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof key !== 'string' || key === '') continue
+      const selection = normalizeSelection(value)
+      if (selection === null) continue
+      if (version >= 2) {
+        const path = recordPath(value)
+        if (path === null) continue
+        map.set(key, bindingRecord(path, selection))
+        continue
+      }
+      // v1：键是规范化绝对路径，迁移到当前注册工作区的 id。
+      if (!isAbsolute(key)) continue
+      const workspace = await resolveWorkspace(key)
+      const path = workspace?.path ?? resolvePath(key)
+      map.set(bindingKey(workspace, path), bindingRecord(path, selection))
+    }
+    return map
   }
 
   /**
@@ -212,20 +233,83 @@ function createRuntime(ctx, config) {
     await rename(temporary, file)
   }
 
+  /** 一条绑定记录：规范化路径 + 选择。 */
+  function bindingRecord(path, selection) {
+    const record = { path, provider: selection.provider, model: selection.model }
+    if (selection.reasoningEffort !== undefined) record.reasoningEffort = selection.reasoningEffort
+    return record
+  }
+
+  /** 记录里的规范化绝对路径，非法时返回 null。 */
+  function recordPath(record) {
+    if (record === null || typeof record !== 'object') return null
+    return typeof record.path === 'string' && isAbsolute(record.path) ? record.path : null
+  }
+
+  /** 绑定表键：已注册工作区用工作区 id，未注册目录退化为 path:<规范化路径>。 */
+  function bindingKey(workspace, canonicalPath) {
+    if (workspace !== undefined && workspace !== null) {
+      const id = workspace.id
+      if (typeof id === 'string' && id !== '') return id
+      if (typeof id === 'number' && Number.isFinite(id)) return String(id)
+    }
+    return `path:${canonicalPath}`
+  }
+
+  /**
+   * 写入前对账：清理已删除工作区的绑定，并把残留的路径键迁移到现存的
+   * 工作区 id 上。注册表不可用时保持原样。
+   * @param {Map<string, object>} map - 待写入的绑定表。
+   * @returns {Promise<Map<string, object>>}
+   */
+  async function reconcileBindings(map) {
+    const registry = ctx.get('workspaceRegistry')
+    if (registry === undefined || typeof registry?.list !== 'function') return map
+    let workspaces
+    try {
+      workspaces = registry.list()
+    } catch (error) {
+      report('workspace-list', error)
+      return map
+    }
+    if (!Array.isArray(workspaces)) return map
+    const ids = new Set()
+    for (const workspace of workspaces) {
+      const id = workspace?.id
+      if (typeof id === 'string' && id !== '') ids.add(id)
+      else if (typeof id === 'number' && Number.isFinite(id)) ids.add(String(id))
+    }
+    const next = new Map()
+    for (const [key, record] of map) {
+      if (key.startsWith('path:')) {
+        const path = recordPath(record)
+        if (path === null) continue
+        const workspace = await resolveWorkspace(path)
+        next.set(bindingKey(workspace, workspace?.path ?? path), record)
+        continue
+      }
+      if (ids.has(key)) next.set(key, record)
+    }
+    return next
+  }
+
   /**
    * 保存或清除一份绑定。整段改动排在同一条写链上，读-改-写不会互相覆盖。
-   * @param {string} path - 规范化工作区路径。
+   * 写入前先对账，已删除工作区的记录不会留在文件里。
+   * @param {string} key - 绑定键（工作区 id 或 path:<路径>）。
+   * @param {string} path - 规范化工作区路径（记录里保留，便于迁移与展示）。
    * @param {object|null} selection - 选择，null 表示清除。
    * @returns {Promise<object|null>} 落盘后的选择。
    */
-  function mutateBinding(path, selection) {
+  function mutateBinding(key, path, selection) {
     const task = writeChain.then(async () => {
       const current = await ensureLoaded()
       const next = new Map(current)
-      if (selection === null) next.delete(path)
-      else next.set(path, selection)
-      await writeBindings(next)
-      bindings = next
+      if (selection === null) next.delete(key)
+      else next.set(key, bindingRecord(path, selection))
+      const reconciled = await reconcileBindings(next)
+      await writeBindings(reconciled)
+      bindings = reconciled
       return selection
     })
     writeChain = task.catch(() => {})
@@ -254,13 +338,19 @@ function createRuntime(ctx, config) {
   }
 
   /**
-   * 规范化查询/写入用路径：优先使用工作区注册表里的 canonical 路径。
+   * 解析一次查询对应的绑定上下文：工作区、规范化路径、绑定键与当前选择。
    * @param {string} requested - 调用方给出的绝对路径。
-   * @returns {Promise<string>}
+   * @returns {Promise<{ workspace: object|undefined, canonical: string, key: string, selection: object|null }>}
    */
-  async function canonicalWorkspacePath(requested) {
+  async function bindingForPath(requested) {
     const workspace = await resolveWorkspace(requested)
-    return workspace?.path ?? resolvePath(requested)
+    const canonical = workspace?.path ?? resolvePath(requested)
+    const key = bindingKey(workspace, canonical)
+    const map = await ensureLoaded()
+    let record = map.get(key)
+    if (record === undefined) record = map.get(`path:${canonical}`)
+    const selection = record === undefined ? null : normalizeSelection(record)
+    return { workspace, canonical, key, selection }
   }
 
   /** 部署级默认选择（新会话在没有任何选择时实际会用的模型）。 */
@@ -537,8 +627,14 @@ function createRuntime(ctx, config) {
     return previous !== null && sameSelection(recorded.next, previous)
   }
 
-  /** 对指定工作区的活 Agent 应用一份选择。 */
-  async function applyToLiveSessions(path, selection, previous, mode) {
+  /**
+   * 对某个工作区的活 Agent 应用一份选择。
+   * @param {string} key - 绑定键（工作区 id 或 path:<路径>）。
+   * @param {object} selection - 要应用的选择。
+   * @param {object|null} previous - 该工作区上一份绑定。
+   * @param {'create'|'retarget'} mode - 创建时应用还是保存后重定向。
+   */
+  async function applyToLiveSessions(key, selection, previous, mode) {
     const registry = ctx.get('agents')
     if (registry === undefined || typeof registry.list !== 'function') return 0
     let applied = 0
@@ -549,7 +645,7 @@ function createRuntime(ctx, config) {
         if (typeof cwd !== 'string' || cwd === '') continue
         const workspace = await resolveWorkspace(cwd)
         const canonical = workspace?.path ?? cwd
-        if (canonical !== path) continue
+        if (bindingKey(workspace, canonical) !== key) continue
         const eligible = mode === 'create' ? shouldApplyOnCreate(agent) : shouldRetargetLiveSession(agent, previous)
         if (!eligible) continue
         const model = agent.model
@@ -575,11 +671,9 @@ function createRuntime(ctx, config) {
       if (!shouldApplyOnCreate(agent)) return
       const cwd = agent.session?.header?.cwd
       if (typeof cwd !== 'string' || cwd === '') return
-      const workspace = await resolveWorkspace(cwd)
-      if (workspace === undefined) return
-      const map = await ensureLoaded()
-      const selection = map.get(workspace.path)
-      if (selection === undefined) return
+      const binding = await bindingForPath(cwd)
+      if (binding.selection === null) return
+      const selection = binding.selection
       const model = agent.model
       if (model === undefined || typeof model?.select !== 'function') return
       model.select(selection)
@@ -665,21 +759,22 @@ function createRuntime(ctx, config) {
     if (path === '' || !isAbsolute(path)) {
       return errorResponse(400, 'invalid-path', 'path must be an absolute directory path')
     }
-    const workspace = await resolveWorkspace(path)
-    const canonical = workspace?.path ?? resolvePath(path)
-    const map = await ensureLoaded()
-    const binding = map.get(canonical) ?? null
+    const binding = await bindingForPath(path)
     const defaults = globalDefaultSelection()
     return jsonResponse({
       ok: true,
       workspace:
-        workspace === undefined
+        binding.workspace === undefined
           ? null
-          : { id: String(workspace.id ?? ''), path: String(workspace.path ?? canonical), title: String(workspace.title ?? '') },
-      path: canonical,
-      binding,
-      bindingName: await selectionDisplayName(binding),
-      bindingProviderName: providerDisplayName(binding?.provider),
+          : {
+              id: String(binding.workspace.id ?? ''),
+              path: String(binding.workspace.path ?? binding.canonical),
+              title: String(binding.workspace.title ?? ''),
+            },
+      path: binding.canonical,
+      binding: binding.selection,
+      bindingName: await selectionDisplayName(binding.selection),
+      bindingProviderName: providerDisplayName(binding.selection?.provider),
       defaults,
       defaultsName: await selectionDisplayName(defaults),
       catalog: url.searchParams.get('catalog') === '0' ? { groups: [], failures: [] } : await buildCatalog(),
@@ -735,9 +830,8 @@ function createRuntime(ctx, config) {
     if (requested === '' || !isAbsolute(requested)) {
       return errorResponse(400, 'invalid-path', 'path must be an absolute directory path')
     }
-    const path = await canonicalWorkspacePath(requested)
-    const map = await ensureLoaded()
-    const previous = map.get(path) ?? null
+    const binding = await bindingForPath(requested)
+    const previous = binding.selection
     let selection = null
     if (body.selection !== null && body.selection !== undefined) {
       const verdict = await validateSelection(body.selection)
@@ -747,16 +841,16 @@ function createRuntime(ctx, config) {
       selection = verdict.selection
     }
     try {
-      await mutateBinding(path, selection)
+      await mutateBinding(binding.key, binding.canonical, selection)
     } catch (error) {
       report('persist', error)
       return errorResponse(500, 'persist-failed', errorMessage(error))
     }
     let applied = 0
     if (selection !== null) {
-      applied = await applyToLiveSessions(path, selection, previous, 'retarget')
+      applied = await applyToLiveSessions(binding.key, selection, previous, 'retarget')
     }
-    return jsonResponse({ ok: true, path, binding: selection, applied: { sessions: applied } })
+    return jsonResponse({ ok: true, path: binding.canonical, binding: selection, applied: { sessions: applied } })
   }
 
   return {
