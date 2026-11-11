@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" role="img" aria-label="Workspace default model">
+  <rect width="32" height="32" rx="8" fill="#EEF3FF"/>
+  <path d="M6.5 11.5h19" stroke="#2F6FEB" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M6.5 16h19" stroke="#2F6FEB" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+  <path d="M6.5 20.5h12" stroke="#2F6FEB" stroke-width="1.8" stroke-linecap="round" opacity="0.3"/>
+  <circle cx="11.5" cy="11.5" r="3" fill="#2F6FEB"/>
+  <circle cx="19.5" cy="16" r="3" fill="#7A5AF8"/>
+  <circle cx="24" cy="20.5" r="3" fill="#0E9F6E"/>
+</svg>

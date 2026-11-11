@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Workspace default model",
+    "description": "Pins a provider, model, and reasoning effort to a Workspace, so new Sessions created in that Workspace start on it. Switching the model inside one Session never changes the Workspace default."
+  }
+}

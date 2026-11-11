@@ -1,0 +1,37 @@
+{
+  "name": "@local/dsh-plugin-bind-workspace-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bind a default provider, model, and reasoning effort to a Workspace so new Sessions in it start on that model.",
+  "engines": {
+    "dsh": "^0.2.2-rc.1"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-context-menu",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  }
+}

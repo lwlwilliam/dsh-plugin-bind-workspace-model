@@ -1,0 +1,7 @@
+# 本 bundle 的插件行。`config` 全部可省略：省略时使用索引内默认值。
+- insert:
+    - id: bind-workspace-model
+      name: '@local/dsh-plugin-bind-workspace-model'
+      config:
+        # 绑定数据目录；留空表示 $DSH_HOME/workspace-default-model。
+        dataDir: ''
