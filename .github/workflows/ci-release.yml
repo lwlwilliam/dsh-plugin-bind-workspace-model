@@ -90,9 +90,16 @@ jobs:
           # 校验和随包一起发布，便于安装前核对。
           sha256sum "$asset" > "${asset}.sha256"
 
+          # 再放一份固定文件名的副本，供 releases/latest/download/<name> 这个
+          # 稳定地址长期使用（每次都指向最新一次 push 构建出的包）。
+          stable="dsh-plugin-bind-workspace-model.tgz"
+          cp "$asset" "$stable"
+          sha256sum "$stable" > "${stable}.sha256"
+
           {
             echo "tag=build-${short_sha}"
             echo "asset=${asset}"
+            echo "stable=${stable}"
             echo "sha=${short_sha}"
             echo "version=${version}"
           } >> "$GITHUB_OUTPUT"
@@ -105,20 +112,28 @@ jobs:
           set -euo pipefail
           tag='${{ steps.pack.outputs.tag }}'
           asset='${{ steps.pack.outputs.asset }}'
+          stable='${{ steps.pack.outputs.stable }}'
           version='${{ steps.pack.outputs.version }}'
           sha='${{ steps.pack.outputs.sha }}'
 
+          stable_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${stable}"
+
           notes="Automated package for commit ${GITHUB_SHA}.
 
-          Install: \`dsh plugin --profile web add <download URL of ${asset}>\`
+          Stable install URL (always the newest build):
+          ${stable_url}
+
+          Or install this exact commit's asset:
+          \`dsh plugin --profile web add <download URL of ${asset}>\`
+
           Version: ${version}
           Commit: ${GITHUB_SHA}"
 
           # 重跑同一提交时（workflow_dispatch 或重试），复用已有 release 并覆盖资产。
           if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" "$asset" "${asset}.sha256" --clobber
+            gh release upload "$tag" "$asset" "${asset}.sha256" "$stable" "${stable}.sha256" --clobber
           else
-            gh release create "$tag" "$asset" "${asset}.sha256" \
+            gh release create "$tag" "$asset" "${asset}.sha256" "$stable" "${stable}.sha256" \
               --target "$GITHUB_SHA" \
               --title "Build ${sha}" \
               --notes "$notes"
@@ -131,4 +146,6 @@ jobs:
           path: |
             ${{ steps.pack.outputs.asset }}
             ${{ steps.pack.outputs.asset }}.sha256
+            ${{ steps.pack.outputs.stable }}
+            ${{ steps.pack.outputs.stable }}.sha256
           if-no-files-found: error

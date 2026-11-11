@@ -40,18 +40,43 @@ dsh-plugin-bind-workspace-model-<version>-<短SHA>.tgz
 dsh-plugin-bind-workspace-model-<version>-<短SHA>.tgz.sha256
 ```
 
-打开仓库的 **Releases** 页面，找最新的 `build-*` Release（资产名里带版本号与提交短 SHA，
-据此可以确认它对应哪次提交），复制 `.tgz` 资产的下载地址，然后：
+每个 Release 里同时有两套资产：
+
+- `dsh-plugin-bind-workspace-model-<version>-<短SHA>.tgz`：这次提交的确定版本（带版本号与提交
+  短 SHA，可追溯，适合固定版本安装）；
+- `dsh-plugin-bind-workspace-model.tgz`：固定文件名的“最新构建”副本，用于下面这个**稳定地址**。
+
+#### 稳定安装地址（推荐长期使用）
+
+```text
+https://github.com/<owner>/<repo>/releases/latest/download/dsh-plugin-bind-workspace-model.tgz
+```
+
+GitHub 的 `releases/latest/download/<文件名>` 会重定向到**最新一个 Release** 里同名资产，所以这个
+地址长期不用改：以后每次 push，安装同一个地址拿到的就是最新构建。把它粘贴进 Web GUI 的
+**Plugins → Add plugin** 输入框，或命令行安装：
+
+```bash
+dsh plugin --profile web add https://github.com/<owner>/<repo>/releases/latest/download/dsh-plugin-bind-workspace-model.tgz
+```
+
+#### 安装某一次确定的构建
+
+打开仓库的 **Releases** 页面，找对应的 `build-*` Release（资产名里带版本号与提交短 SHA，据此
+确认它对应哪次提交），复制该 `.tgz` 资产的下载地址，然后：
 
 ```bash
 dsh plugin --profile web add <release 里 .tgz 的下载地址>
 ```
 
-也可以把同一个 `.tgz` 下载地址粘贴进 Web GUI 的 **Plugins** 页面安装框。安装前可选核对：
+也可以把同一个 `.tgz` 下载地址粘贴进 Web GUI 的 **Plugins → Add plugin** 安装框。安装前可选核对：
 
 ```bash
 sha256sum -c dsh-plugin-bind-workspace-model-<version>-<短SHA>.tgz.sha256
 ```
+
+> 说明：GitHub Actions 自动发布的 Release 没有“升级”语义；从 tarball 安装的插件不会出现在
+> “Versions”更新列表里，升级方式是卸载后重新用同一个稳定地址安装。
 
 ### 方式 B：直接安装 GitHub 仓库
 
