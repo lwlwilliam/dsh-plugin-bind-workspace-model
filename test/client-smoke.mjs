@@ -411,7 +411,23 @@ const styleNode = findNode(openTree, (node) => node.type === 'style')
 assert.ok(styleNode !== null && String(styleNode.children?.[0] ?? '').includes('--dsw-alias-bg-layer-2'), 'styles use theme tokens')
 const selectedRows = findAll(openTree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('wbm-optionSelected'))
 assert.equal(selectedRows.length, 1, 'exactly one row is marked as the current default')
-console.log('ok 5 - dialog renders the modal tree and the current default row')
+const activeRows = findAll(openTree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('wbm-optionActive'))
+assert.equal(activeRows.length, 1, 'exactly one row carries the keyboard highlight')
+assert.equal(activeRows[0], selectedRows[0], 'the keyboard highlight starts on the current default row')
+
+// 下钻到已保存的推理强度时，高亮同样应落在当前默认强度上，而不是第一行 Auto。
+selectedRows[0].props.onClick()
+const effortTree = await flush(Dialog)
+const selectedEffortRows = findAll(effortTree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('wbm-optionSelected'))
+const activeEffortRows = findAll(effortTree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('wbm-optionActive'))
+assert.equal(selectedEffortRows.length, 1, 'exactly one effort row is marked as the current default')
+assert.equal(activeEffortRows.length, 1, 'exactly one effort row carries the keyboard highlight')
+assert.equal(activeEffortRows[0], selectedEffortRows[0], 'the keyboard highlight starts on the current effort row')
+const backButton = findNode(effortTree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('wbm-groupAction'))
+assert.ok(backButton !== null, 'effort pane has a back button')
+backButton.props.onClick()
+await flush(Dialog)
+console.log('ok 5 - dialog renders the modal tree and aligns keyboard highlight with the default row')
 
 /* 6. 搜索同时匹配提供商与模型名称。 */
 {

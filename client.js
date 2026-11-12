@@ -472,6 +472,27 @@ window.__ModuleLoader__.load({
         return rows
       }, [pane, t])
 
+      /** 当前默认模型在扁平列表中的索引；-1 表示不在当前筛选结果里。 */
+      const selectedChoiceIndex = React.useMemo(() => {
+        if (binding === null) return -1
+        return choices.findIndex((choice) => sameModel(binding, choice.group.id, choice.model.id))
+      }, [binding, choices])
+
+      /** 当前默认推理强度在子菜单中的索引；-1 表示当前模型没有已保存的强度。 */
+      const selectedEffortIndex = React.useMemo(() => {
+        if (pane === null || binding === null) return -1
+        if (!sameModel(binding, pane.group.id, pane.model.id)) return -1
+        return effortChoices.findIndex((row) => row.effort === binding.reasoningEffort)
+      }, [pane, binding, effortChoices])
+
+      // 键盘高亮初始落在当前默认项上。若仍从第一行开始，选中项不在首位时
+      // 第一行会额外带上悬停/高亮底色，看起来像出现了第二个选中项。
+      React.useEffect(() => {
+        if (!open || state.status !== 'ready') return
+        const preferred = pane === null ? selectedChoiceIndex : selectedEffortIndex
+        setActiveIndex(preferred >= 0 ? preferred : 0)
+      }, [open, state.status, pane, selectedChoiceIndex, selectedEffortIndex])
+
       // 打开后把焦点放进面板；显示搜索框时优先聚焦搜索。
       React.useEffect(() => {
         if (!open) return
