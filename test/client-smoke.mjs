@@ -196,24 +196,20 @@ assert.ok(registered.dictionaries.get(NS)?.en?.['menu.label'] === 'Default model
 assert.ok(registered.dictionaries.get(NS)?.zh?.['menu.label'] === '默认模型', 'carries Chinese copy')
 console.log('ok 1 - locale dictionaries registered')
 
-/* 2. 菜单 / 图标 / 浮层注册。 */
-assert.equal(registered.menus.length, 1, 'registers one workspace menu contribution')
-const menu = registered.menus[0]
-assert.equal(menu.id, 'workspace-default-model')
-assert.equal(menu.target, 'workspace', 'targets the workspace context menu')
-assert.equal(typeof menu.resolve, 'function')
-assert.ok(registered.slots.includes('contextMenu.icon'), 'injects the context menu icon slot')
+/* 2. 菜单行 / 浮层注册。 */
+assert.equal(registered.menus.length, 0, 'does not add a native menu action (the row is self-rendered)')
+assert.ok(registered.slots.includes('contextMenu.content'), 'injects the workspace menu content slot')
 assert.ok(registered.slots.includes('shell.overlay'), 'injects the shell overlay slot')
-assert.ok(registered.slots.includes('contextMenu.icon:workspace.defaultModel'), 'registers the icon by key')
+assert.ok(registered.slots.includes('contextMenu.content:workspace'), 'registers the workspace menu row')
 assert.ok(registered.slots.includes('shell.overlay:workspace-default-model'), 'registers the dialog in the overlay')
-console.log('ok 2 - workspace menu, icon and overlay entries registered')
+console.log('ok 2 - workspace menu row and overlay entries registered')
 
 /* 3. 关闭状态下对话框不渲染。 */
 const Dialog = registered.components.get('shell.overlay:workspace-default-model')
 assert.equal(typeof Dialog, 'function', 'overlay entry is a component')
 /** 依次展开外层包装组件，直到得到宿主元素或 null。 */
-function renderRoot(component) {
-  let node = component()
+function renderRoot(component, props) {
+  let node = component(props)
   let depth = 0
   while (node !== null && typeof node === 'object' && typeof node.type === 'function' && depth < 6) {
     node = node.type(node.props)
@@ -225,20 +221,38 @@ const closed = renderRoot(Dialog)
 assert.equal(closed, null, 'closed dialog renders nothing')
 console.log('ok 3 - dialog renders nothing while closed')
 
-/* 4. 菜单动作：标签带当前模型名，运行后打开对话框。 */
-const target = { workspaceId: 'ws-1', path: '/work/demo', displayTitle: 'Demo' }
-const actions = await menu.resolve(target, new AbortController().signal)
-assert.equal(actions.length, 1, 'menu resolves one action')
-assert.ok(actions[0].label.includes('默认模型'), 'label is localized')
-assert.ok(actions[0].label.includes('默认模型'), 'label is localized')
-assert.ok(actions[0].label.includes('OpenCode Go'), 'label shows the bound provider name')
-assert.equal(actions[0].label.includes('DeepSeek V4.1 Flash'), false, 'label keeps the model out (shown in the dialog)')
-assert.deepEqual(actions[0].icon, { key: 'workspace.defaultModel' })
-const labelCall = fetchCalls.find((call) => call.url.includes('catalog=0'))
-assert.ok(labelCall !== undefined, 'menu label fetch skips the full catalog')
-actions[0].run()
-console.log('ok 4 - menu action resolves and opens the dialog')
-
+/* 4. 菜单行：模型名 + 小字体提供商，点击打开对话框。 */
+const target = { kind: 'workspace', value: { workspaceId: 'ws-1', path: '/work/demo', displayTitle: 'Demo' } }
+let dismissed = false
+const MenuRow = registered.components.get('contextMenu.content:workspace')
+assert.equal(typeof MenuRow, 'function', 'workspace menu row is a component')
+const menuTree = renderRoot(MenuRow, { target, dismiss: () => { dismissed = true } })
+assert.ok(menuTree !== null && typeof menuTree === 'object', 'menu row renders')
+function findNode(node, predicate) {
+  if (node === null || typeof node !== 'object') return null
+  if (predicate(node)) return node
+  for (const child of node.children ?? []) {
+    const found = findNode(child, predicate)
+    if (found !== null) return found
+  }
+  return null
+}
+const menuButton = findNode(menuTree, (node) => node.props !== undefined && node.props.role === 'menuitem')
+assert.ok(menuButton !== null, 'menu row is a menuitem button')
+const menuLabels = []
+function collectText(node) {
+  if (node === null || typeof node !== 'object') {
+    if (typeof node === 'string') menuLabels.push(node)
+    return
+  }
+  for (const child of node.children ?? []) collectText(child)
+}
+collectText(menuButton)
+assert.ok(menuLabels.includes('默认模型'), 'menu row is labelled 默认模型')
+assert.equal(typeof menuButton.props.title, 'string', 'hover title is present')
+menuButton.props.onClick()
+assert.equal(dismissed, true, 'clicking the row dismisses the menu')
+console.log('ok 4 - self-rendered menu row opens the dialog')
 /* 5. 打开后渲染出 role="dialog" 的树。 */
 const openTree = renderRoot(Dialog)
 assert.ok(openTree !== null && typeof openTree === 'object', 'open dialog renders a tree')
@@ -254,8 +268,6 @@ function findDialog(node) {
 const dialog = findDialog(openTree)
 assert.ok(dialog !== null, 'open dialog tree carries role="dialog"')
 assert.equal(dialog.props['aria-modal'], 'true', 'dialog is modal')
-const styleNode = findStyle(openTree)
-assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-layer-2'), 'dialog carries its stylesheet')
 function findStyle(node) {
   if (node === null || typeof node !== 'object') return null
   if (node.type === 'style') return node.children?.[0] ?? null
@@ -265,11 +277,14 @@ function findStyle(node) {
   }
   return null
 }
+const styleNode = findStyle(openTree)
+assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-layer-2'), 'dialog carries its stylesheet')
+assert.ok(styleNode.includes('wbm-menuItem'), 'stylesheet also covers the workspace menu row')
 console.log('ok 5 - open dialog renders the modal tree with its stylesheet')
 
-/* 6. 空上下文/缺路径时不提供动作（防御式）。 */
-const noPath = await menu.resolve({ workspaceId: 'ws-1', displayTitle: 'Demo' }, new AbortController().signal)
-assert.deepEqual(noPath, [], 'menu declines when the target has no path')
-console.log('ok 6 - menu declines malformed targets')
+/* 6. 空/异常 target 时菜单行不渲染（防御式）。 */
+assert.equal(renderRoot(MenuRow, { target: { kind: 'workspace', value: {} }, dismiss: () => {} }), null)
+assert.equal(renderRoot(MenuRow, { target: { kind: 'session', value: {} }, dismiss: () => {} }), null)
+console.log('ok 6 - menu row declines malformed targets')
 
 console.log('\nclient-smoke: all checks passed')

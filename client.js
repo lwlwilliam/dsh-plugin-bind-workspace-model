@@ -13,8 +13,6 @@ window.__ModuleLoader__.load({
     const ROUTE_BINDING = 'api/dsh-plugin-bind-workspace-model/binding'
     /** 对话框在 shell.overlay 里的注册 id。 */
     const OVERLAY_ID = 'workspace-default-model'
-    /** 上下文菜单图标 key。 */
-    const ICON_KEY = 'workspace.defaultModel'
     /** provider 排序：DeepSeek 账号、DeepSeek、其余保持目录顺序。 */
     const PROVIDER_ORDER = { 'deepseek-account': 0, deepseek: 1 }
 
@@ -23,15 +21,12 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const en = {
       'menu.label': 'Default model',
-      'menu.labelWithProvider': 'Default model · {provider}',
       'dialog.currentDefault': 'Current default: {provider} · {model}',
       'dialog.title': 'Workspace default model',
-      'dialog.description': 'New sessions in this workspace start on this model.',
       'dialog.following': 'No workspace default; new sessions follow the global default ({model}).',
       'dialog.loading': 'Loading models…',
       'dialog.empty': 'No models available. Add a provider or its credentials in Settings → Models.',
       'dialog.failures': '{count} provider(s) could not list models.',
-      'dialog.current': 'Current',
       'dialog.search': 'Search models',
       'dialog.clearSearch': 'Clear search',
       'dialog.effort.title': 'Reasoning effort for {model}',
@@ -50,15 +45,12 @@ window.__ModuleLoader__.load({
     }
     const zh = {
       'menu.label': '默认模型',
-      'menu.labelWithProvider': '默认模型 · {provider}',
       'dialog.currentDefault': '当前默认：{provider} · {model}',
       'dialog.title': '工作区默认模型',
-      'dialog.description': '该工作区里新建的会话默认使用这个模型。',
       'dialog.following': '未设置工作区默认模型；新建会话跟随全局默认（{model}）。',
       'dialog.loading': '正在加载模型…',
       'dialog.empty': '暂无可用模型。请在 设置 → 模型 中添加提供方或凭据。',
       'dialog.failures': '有 {count} 个提供方无法列出模型。',
-      'dialog.current': '当前',
       'dialog.search': '搜索模型',
       'dialog.clearSearch': '清除搜索',
       'dialog.effort.title': '推理强度：{model}',
@@ -98,9 +90,6 @@ window.__ModuleLoader__.load({
 .wbm-close{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:var(--dsw-radius-sm);background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);padding:0}
 @media(hover:hover){.wbm-close:hover{background:var(--dsw-alias-interactive-bg-hover)}}
 .wbm-close:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));outline-offset:2px}
-.wbm-description{margin:0;padding:0 24px;font-size:14px;line-height:22px;font-weight:400;color:var(--dsw-alias-label-primary)}
-.wbm-path{margin-top:2px;padding:0 24px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-currentDefault{margin-top:6px;padding:0 24px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wbm-body{display:flex;flex:1 1 auto;flex-direction:column;min-width:0;min-height:0;margin-top:20px;padding:0 24px}
 /* 官方模型菜单的搜索行 */
 .wbm-searchRow{flex:none;position:relative;margin:2px 0 3px}
@@ -145,6 +134,15 @@ window.__ModuleLoader__.load({
 .wbm-status,.wbm-empty{color:var(--dsw-alias-label-tertiary);padding:8px;font-size:12px;line-height:18px}
 .wbm-status{display:flex;align-items:center;gap:8px}
 .wbm-error{border-radius:var(--dsw-radius-md);background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);align-items:flex-start;gap:6px;margin:4px 0;padding:6px 7px;font-size:11px;line-height:16px;display:flex}
+/* 自绘的工作区菜单行：模型名正常字号，提供商小一号、次要色（原生 label 做不到分段样式） */
+.wbm-menuSeparator{height:.5px;margin:3px 8px;background:var(--dsw-alias-border-l2)}
+.wbm-menuItem{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:100%;min-height:34px;padding:6px 8px;border:none;border-radius:var(--dsw-radius-md);background:transparent;cursor:pointer;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary);text-align:left;font-family:inherit}
+@media(hover:hover){.wbm-menuItem:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}}
+.wbm-menuItem:focus-visible{background:var(--dsw-alias-interactive-bg-hover);outline:none}
+.wbm-menuIcon{flex:none;display:inline-flex;width:14px;height:14px;align-items:center;justify-content:center;color:var(--dsw-alias-menu-icon)}
+.wbm-menuIcon svg{width:14px;height:14px}
+.wbm-menuLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbm-menuProvider{flex:none;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
 /* 官方 Button */
 .wbm-footer{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:20px 24px 24px}
 .wbm-footerNote{flex:1;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -624,29 +622,9 @@ window.__ModuleLoader__.load({
           h(CloseIcon, null),
         ),
       )
-      const subtitle =
-        target.displayTitle !== undefined && target.displayTitle !== ''
-          ? target.displayTitle
-          : target.path
-      const description = h('div', { className: 'wbm-description' }, t('dialog.description'))
-      const pathLine = h('div', { className: 'wbm-path', title: target.path }, subtitle)
-      const currentLine =
-        data === null || data.binding === null || data.binding === undefined
-          ? null
-          : h(
-              'div',
-              { className: 'wbm-currentDefault' },
-              t('dialog.currentDefault', {
-                provider:
-                  typeof data.bindingProviderName === 'string' && data.bindingProviderName !== ''
-                    ? data.bindingProviderName
-                    : data.binding.provider,
-                model:
-                  typeof data.bindingName === 'string' && data.bindingName !== ''
-                    ? data.bindingName
-                    : data.binding.model,
-              }),
-            )
+      // 标题与工作区身份合并到 dialog 的 aria-label 里，正文只留选择器本身。
+      const workspaceName =
+        target.displayTitle !== undefined && target.displayTitle !== '' ? target.displayTitle : target.path
 
       /** 列表区。 */
       let index = -1
@@ -693,7 +671,6 @@ window.__ModuleLoader__.load({
                   'span',
                   { className: 'wbm-badgedName' },
                   h('span', { className: 'wbm-badgedNameText' }, row.label),
-                  selected ? h('span', { className: 'wbm-tag', 'data-tone': 'info' }, t('dialog.current')) : null,
                 ),
               ),
             ),
@@ -772,13 +749,12 @@ window.__ModuleLoader__.load({
                       badge === ''
                         ? null
                         : h('span', { className: 'wbm-tag', 'data-tone': badgeTone(model.badge?.tone) }, badge),
-                      selected ? h('span', { className: 'wbm-tag', 'data-tone': 'info' }, t('dialog.current')) : null,
                     ),
                   ),
                 ),
-                efforts.length === 0
-                  ? null
-                  : h('span', { className: 'wbm-effort' }, currentEffort ?? t('dialog.effort.autoShort')),
+                efforts.length > 0 && selected
+                  ? h('span', { className: 'wbm-effort' }, currentEffort ?? t('dialog.effort.autoShort'))
+                  : null,
                 h(
                   'span',
                   { className: 'wbm-rowTrailing' },
@@ -840,9 +816,20 @@ window.__ModuleLoader__.load({
         errors.push(h('div', { className: 'wbm-error', key: 'save-error' }, state.error))
       }
 
-      /** 页脚：跟随全局默认的说明 + 清除 + 关闭。 */
+      /** 页脚左侧始终说明当前状态：已有绑定，或正跟随的全局默认。 */
       let footerNote = null
-      if (defaults !== null && binding === null) {
+      if (binding !== null) {
+        footerNote = t('dialog.currentDefault', {
+          provider:
+            data !== null && typeof data.bindingProviderName === 'string' && data.bindingProviderName !== ''
+              ? data.bindingProviderName
+              : binding.provider,
+          model:
+            data !== null && typeof data.bindingName === 'string' && data.bindingName !== ''
+              ? data.bindingName
+              : binding.model,
+        })
+      } else if (defaults !== null) {
         footerNote = t('dialog.following', { model: findModelName(data, defaults.provider, defaults.model) })
       }
       const footer = h(
@@ -893,7 +880,7 @@ window.__ModuleLoader__.load({
             className: 'wbm-dialog',
             role: 'dialog',
             'aria-modal': 'true',
-            'aria-label': t('dialog.title'),
+            'aria-label': `${t('dialog.title')} · ${workspaceName}`,
             tabIndex: -1,
             ref: panelRef,
             onKeyDown,
@@ -902,9 +889,6 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'wbm-content' },
             header,
-            description,
-            pathLine,
-            currentLine,
             h(
               'div',
               { className: 'wbm-body' },
@@ -915,6 +899,89 @@ window.__ModuleLoader__.load({
             ),
             footer,
           ),
+        ),
+      )
+    }
+
+    /**
+     * 工作区 “...” 菜单里的“默认模型”行。
+     *
+     * 共享菜单的动作只接受单行纯文本 label，没法把“模型名（小字体的提供商）”
+     * 混排；这一行因此通过 contextMenu.content 自己渲染，样式与键盘行为
+     * 对齐官方菜单行。代价是它固定排在其它菜单项之后。
+     */
+    function WorkspaceMenuRow(props) {
+      const { target, dismiss, t, store } = props
+      const value =
+        target !== null && target !== undefined && target.kind === 'workspace' ? target.value : undefined
+      const path = typeof value?.path === 'string' ? value.path : ''
+      const displayTitle = typeof value?.displayTitle === 'string' ? value.displayTitle : ''
+      const [hint, setHint] = React.useState(null)
+
+      // 菜单打开时顺带读一次当前绑定（catalog=0，不拉完整模型目录）。
+      React.useEffect(() => {
+        if (path === '') return undefined
+        const controller = new AbortController()
+        setHint(null)
+        fetch(`${ROUTE_STATE}?path=${encodeURIComponent(path)}&catalog=0`, {
+          method: 'GET',
+          credentials: 'same-origin',
+          signal: controller.signal,
+        })
+          .then(async (response) => {
+            const body = await response.json().catch(() => null)
+            if (controller.signal.aborted) return
+            const binding = body !== null && body.ok === true ? body.binding : null
+            if (binding === null || binding === undefined) {
+              setHint(null)
+              return
+            }
+            setHint({
+              provider:
+                typeof body.bindingProviderName === 'string' && body.bindingProviderName !== ''
+                  ? body.bindingProviderName
+                  : binding.provider,
+              model:
+                typeof body.bindingName === 'string' && body.bindingName !== '' ? body.bindingName : binding.model,
+            })
+          })
+          .catch(() => {
+            /* 读取失败只影响小字提示，菜单照常可用 */
+          })
+        return () => {
+          controller.abort()
+        }
+      }, [path])
+
+      if (path === '') return null
+      const title = hint === null ? t('menu.label') : `${hint.model}（${hint.provider}）`
+      return h(
+        'div',
+        { role: 'presentation' },
+        h('div', { className: 'wbm-menuSeparator', role: 'separator' }),
+        h(
+          'button',
+          {
+            type: 'button',
+            role: 'menuitem',
+            className: 'wbm-menuItem',
+            title,
+            onClick: () => {
+              try {
+                if (typeof dismiss === 'function') dismiss()
+              } catch {
+                /* 菜单已关闭 */
+              }
+              store.open({
+                workspaceId: typeof value?.workspaceId === 'string' ? value.workspaceId : '',
+                path,
+                displayTitle,
+              })
+            },
+          },
+          h('span', { className: 'wbm-menuIcon', 'aria-hidden': 'true' }, h(WorkspaceDefaultModelIcon, null)),
+          h('span', { className: 'wbm-menuLabel' }, hint === null ? t('menu.label') : hint.model),
+          hint === null ? null : h('span', { className: 'wbm-menuProvider' }, `（${hint.provider}）`),
         ),
       )
     }
@@ -946,58 +1013,12 @@ window.__ModuleLoader__.load({
 
         ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'dsh-plugin-bind-workspace-model: dictionaries')
 
-        // “...” 菜单里的图标。
-        ctx.slots.inject('contextMenu.icon', () =>
-          ctx.slots.register({ name: 'contextMenu.icon', key: ICON_KEY }, WorkspaceDefaultModelIcon),
-        )
-
-        // 工作区 “...” 菜单项。标签带上当前绑定的模型名，便于一眼确认。
-        ctx.effect(
-          () =>
-            ctx.contextMenus.register({
-              id: 'workspace-default-model',
-              target: 'workspace',
-              order: 150,
-              resolve: async (target, signal) => {
-                if (target === null || typeof target.path !== 'string' || target.path === '') return []
-                let label = translate('menu.label')
-                try {
-                  const response = await fetch(
-                    `${ROUTE_STATE}?path=${encodeURIComponent(target.path)}&catalog=0`,
-                    { method: 'GET', credentials: 'same-origin', signal },
-                  )
-                  const body = await response.json().catch(() => null)
-                  const binding = body !== null && body.ok === true ? body.binding : null
-                  if (binding !== null && binding !== undefined) {
-                    // 共享菜单的动作只有单行纯文本 label，没有 tooltip 字段；
-                    // 菜单里放较短的提供方名称，具体模型名在对话框顶部的
-                    // “当前默认：<provider> · <model>”一行里展示。
-                    const provider =
-                      typeof body.bindingProviderName === 'string' && body.bindingProviderName !== ''
-                        ? body.bindingProviderName
-                        : binding.provider
-                    label = translate('menu.labelWithProvider', { provider })
-                  }
-                } catch {
-                  /* 标签降级为纯文字，不影响菜单打开 */
-                }
-                return [
-                  {
-                    id: 'workspace-default-model',
-                    label,
-                    icon: { key: ICON_KEY },
-                    run: () => {
-                      store.open({
-                        workspaceId: typeof target.workspaceId === 'string' ? target.workspaceId : '',
-                        path: target.path,
-                        displayTitle: typeof target.displayTitle === 'string' ? target.displayTitle : '',
-                      })
-                    },
-                  },
-                ]
-              },
-            }),
-          'dsh-plugin-bind-workspace-model: workspace menu',
+        // 工作区 “...” 菜单：自绘一行，模型名 + 小字体的提供商。
+        const MenuRow = function WorkspaceDefaultModelMenuRow(props) {
+          return h(WorkspaceMenuRow, { ...props, t: translate, store })
+        }
+        ctx.slots.inject('contextMenu.content', () =>
+          ctx.slots.register({ name: 'contextMenu.content', key: 'workspace', locale: NS }, MenuRow),
         )
 
         // 对话框挂在 frame 级浮层里，只在打开时渲染。
