@@ -147,10 +147,12 @@ const stateResponse = {
 }
 
 const fetchCalls = []
+let unbound = false
 async function fetchMock(input, init = {}) {
   const url = String(input)
   fetchCalls.push({ url, method: init.method ?? 'GET' })
-  const body = url.includes('/binding') ? { ok: true, binding: null, applied: { sessions: 0 } } : stateResponse
+  const state = unbound ? { ...stateResponse, binding: null, bindingName: null, bindingProviderName: null } : stateResponse
+  const body = url.includes('/binding') ? { ok: true, binding: null, applied: { sessions: 0 } } : state
   return {
     ok: true,
     status: 200,
@@ -196,13 +198,18 @@ assert.ok(registered.dictionaries.get(NS)?.en?.['menu.choose'] === 'Choose defau
 assert.ok(registered.dictionaries.get(NS)?.zh?.['menu.choose'] === '选择默认模型', 'carries Chinese copy')
 console.log('ok 1 - locale dictionaries registered')
 
-/* 2. 菜单行 / 浮层注册。 */
-assert.equal(registered.menus.length, 0, 'does not add a native menu action (the row is self-rendered)')
-assert.ok(registered.slots.includes('contextMenu.content'), 'injects the workspace menu content slot')
+/* 2. 菜单动作 / 图标 / 浮层注册。 */
+assert.equal(registered.menus.length, 1, 'registers one native workspace menu action')
+const menu = registered.menus[0]
+assert.equal(menu.id, 'workspace-default-model')
+assert.equal(menu.target, 'workspace', 'targets the workspace context menu')
+assert.equal(menu.order, 150, 'sits between Rename and Delete')
+assert.equal(typeof menu.resolve, 'function')
+assert.ok(registered.slots.includes('contextMenu.icon'), 'injects the context menu icon slot')
 assert.ok(registered.slots.includes('shell.overlay'), 'injects the shell overlay slot')
-assert.ok(registered.slots.includes('contextMenu.content:workspace'), 'registers the workspace menu row')
+assert.ok(registered.slots.includes('contextMenu.icon:workspace.defaultModel'), 'registers the icon by key')
 assert.ok(registered.slots.includes('shell.overlay:workspace-default-model'), 'registers the dialog in the overlay')
-console.log('ok 2 - workspace menu row and overlay entries registered')
+console.log('ok 2 - workspace menu action, icon and overlay entries registered')
 
 /* 3. 关闭状态下对话框不渲染。 */
 const Dialog = registered.components.get('shell.overlay:workspace-default-model')
@@ -221,38 +228,26 @@ const closed = renderRoot(Dialog)
 assert.equal(closed, null, 'closed dialog renders nothing')
 console.log('ok 3 - dialog renders nothing while closed')
 
-/* 4. 菜单行：模型名 + 小字体提供商，点击打开对话框。 */
-const target = { kind: 'workspace', value: { workspaceId: 'ws-1', path: '/work/demo', displayTitle: 'Demo' } }
-let dismissed = false
-const MenuRow = registered.components.get('contextMenu.content:workspace')
-assert.equal(typeof MenuRow, 'function', 'workspace menu row is a component')
-const menuTree = renderRoot(MenuRow, { target, dismiss: () => { dismissed = true } })
-assert.ok(menuTree !== null && typeof menuTree === 'object', 'menu row renders')
-function findNode(node, predicate) {
-  if (node === null || typeof node !== 'object') return null
-  if (predicate(node)) return node
-  for (const child of node.children ?? []) {
-    const found = findNode(child, predicate)
-    if (found !== null) return found
-  }
-  return null
+/* 4. 菜单动作：已绑定时显示“提供商 · 模型”，运行后打开对话框。 */
+const target = { workspaceId: 'ws-1', path: '/work/demo', displayTitle: 'Demo' }
+const actions = await menu.resolve(target, new AbortController().signal)
+assert.equal(actions.length, 1, 'menu resolves one action')
+assert.equal(actions[0].label, 'OpenCode Go · DeepSeek V4.1 Flash', 'label reads provider · model once bound')
+assert.deepEqual(actions[0].icon, { key: 'workspace.defaultModel' })
+const labelCall = fetchCalls.find((call) => call.url.includes('catalog=0'))
+assert.ok(labelCall !== undefined, 'menu label fetch skips the full catalog')
+actions[0].run()
+console.log('ok 4 - menu action resolves the bound provider and model, then opens the dialog')
+
+/* 4b. 未设置时菜单项读作“选择默认模型”。 */
+{
+  unbound = true
+  const unset = await menu.resolve(target, new AbortController().signal)
+  assert.equal(unset[0].label, '选择默认模型', 'unset workspace is labelled 选择默认模型')
+  unbound = false
 }
-const menuButton = findNode(menuTree, (node) => node.props !== undefined && node.props.role === 'menuitem')
-assert.ok(menuButton !== null, 'menu row is a menuitem button')
-const menuLabels = []
-function collectText(node) {
-  if (node === null || typeof node !== 'object') {
-    if (typeof node === 'string') menuLabels.push(node)
-    return
-  }
-  for (const child of node.children ?? []) collectText(child)
-}
-collectText(menuButton)
-assert.ok(menuLabels.includes('选择默认模型'), 'unset workspace is labelled 选择默认模型')
-assert.equal(menuButton.props.title, undefined, 'no hover tooltip on the row')
-menuButton.props.onClick()
-assert.equal(dismissed, true, 'clicking the row dismisses the menu')
-console.log('ok 4 - self-rendered menu row opens the dialog')
+console.log('ok 4b - unset workspace shows the action label')
+
 /* 5. 打开后渲染出 role="dialog" 的树。 */
 const openTree = renderRoot(Dialog)
 assert.ok(openTree !== null && typeof openTree === 'object', 'open dialog renders a tree')
@@ -279,13 +274,13 @@ function findStyle(node) {
 }
 const styleNode = findStyle(openTree)
 assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-layer-2'), 'dialog carries its stylesheet')
-assert.ok(styleNode.includes('wbm-menuItem'), 'stylesheet also covers the workspace menu row')
-assert.ok(styleNode.includes('wbm-menuProvider'), 'stylesheet styles the provider separately')
+assert.ok(styleNode.includes('wbm-option'), 'stylesheet covers the model option rows')
+assert.ok(styleNode.includes('wbm-footerNote'), 'stylesheet covers the footer state line')
 console.log('ok 5 - open dialog renders the modal tree with its stylesheet')
 
-/* 6. 空/异常 target 时菜单行不渲染（防御式）。 */
-assert.equal(renderRoot(MenuRow, { target: { kind: 'workspace', value: {} }, dismiss: () => {} }), null)
-assert.equal(renderRoot(MenuRow, { target: { kind: 'session', value: {} }, dismiss: () => {} }), null)
-console.log('ok 6 - menu row declines malformed targets')
+/* 6. 空 target 时不提供动作（防御式）。 */
+assert.deepEqual(await menu.resolve(null, new AbortController().signal), [])
+assert.deepEqual(await menu.resolve({ workspaceId: 'ws-1', displayTitle: 'Demo' }, new AbortController().signal), [])
+console.log('ok 6 - menu declines malformed targets')
 
 console.log('\nclient-smoke: all checks passed')
