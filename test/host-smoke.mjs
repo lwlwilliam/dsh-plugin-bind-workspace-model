@@ -7,6 +7,7 @@
  * - `GET /state` 返回工作区、绑定、部署默认值与模型目录（含推理强度）；
  * - `POST /binding` 校验 provider/model/effort、原子落盘、可清除；
  * - 新会话按工作区默认值记录 `model/selection`；
+ * - 会话内切换模型/推理强度会回写工作区默认值；
  * - 已有选择、用户切换过、显式路由的会话不被覆盖；
  * - 改默认值时只重定向“空会话且携带上一份默认值”的会话。
  *
@@ -233,7 +234,9 @@ try {
   )
   const handleCreated = handlers.get('agent/created')
   assert.equal(typeof handleCreated, 'function', 'registers agent/created hook')
-  console.log('ok 1 - plugin loads and registers routes + agent hook')
+  const handleSessionEvent = handlers.get('session/event')
+  assert.equal(typeof handleSessionEvent, 'function', 'registers session/event hook')
+  console.log('ok 1 - plugin loads and registers routes + lifecycle hooks')
 
   /* 2. 空绑定下的 state：目录分组、推理强度、失败提供方都被标出。 */
   {
@@ -356,6 +359,47 @@ try {
   }
   console.log('ok 6 - a new blank session receives the workspace default')
 
+  /* 6b. 会话内切换模型/推理强度：回写当前工作区默认值。 */
+  {
+    const selected = { provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: 'max' }
+    await handleSessionEvent(
+      { header: { cwd: workspacePath } },
+      { type: 'model/selection', data: selected },
+    )
+    const state = await getState(workspacePath)
+    assert.deepEqual(state.body.binding, selected, 'session model switch becomes the workspace default')
+    const file = await readBindingsFile()
+    assert.deepEqual(
+      file.bindings['ws-1'],
+      { path: workspacePath, ...selected },
+      'session model switch is persisted with its reasoning effort',
+    )
+
+    const subagent = { header: { cwd: workspacePath, parentSession: 'parent-1' } }
+    await handleSessionEvent(
+      subagent,
+      { type: 'model/selection', data: { provider: 'opencode-go', model: 'glm-5.3' } },
+    )
+    const after = await getState(workspacePath)
+    assert.deepEqual(after.body.binding, selected, 'subagent model switches do not touch the workspace default')
+
+    // 恢复原绑定，供后面的“改默认值只重定向旧默认值”用例使用。
+    const restored = await postBinding({ path: workspacePath, selection: binding })
+    assert.equal(restored.status, 200)
+  }
+  console.log('ok 6b - model/effort switches inside a session persist to the workspace default')
+
+  /* 6c. DSH 复用旧空白会话作为“新会话”时，仍要套用工作区默认值。 */
+  {
+    const reused = makeAgent({
+      recorded: { provider: 'deepseek', model: 'deepseek-chat' },
+      current: { provider: 'deepseek', model: 'deepseek-chat' },
+    })
+    await handleCreated({ agent: reused, source: 'resume' })
+    assert.deepEqual(reused.selected, [binding], 'a reused blank session receives the workspace default')
+  }
+  console.log('ok 6c - a reused blank session receives the workspace default')
+
   /* 7. 不覆盖：已有选择 / 用户切换 / 显式路由 / 非空会话 / subagent / fork。 */
   {
     const alreadySelected = makeAgent({ recorded: { provider: 'deepseek', model: 'deepseek-chat' } })
@@ -389,27 +433,30 @@ try {
   }
   console.log('ok 7 - existing, switched, explicit, started, subagent and fork sessions are preserved')
 
-  /* 8. 改默认值：只重定向携带上一份默认值的空会话。 */
+  /* 8. 改默认值：该工作区所有未开始会话都切到新默认值。 */
   {
-    const carried = makeAgent({ recorded: { ...binding } })
-    const switched = makeAgent({ recorded: { provider: 'deepseek', model: 'deepseek-chat' } })
+    const carried = makeAgent({ recorded: { ...binding }, current: { ...binding } })
+    const staleBlank = makeAgent({
+      recorded: { provider: 'deepseek', model: 'deepseek-chat' },
+      current: { provider: 'deepseek', model: 'deepseek-chat' },
+    })
     const started = makeAgent({
       recorded: { ...binding },
       boundary: { openTurnStartSeq: 5, lastTurn: 5 },
     })
-    liveAgents.push(carried, switched, started)
+    liveAgents.push(carried, staleBlank, started)
 
     const next = { provider: 'opencode-go', model: 'glm-5.3' }
     const { status, body } = await postBinding({ path: workspacePath, selection: next })
     assert.equal(status, 200)
     assert.deepEqual(body.binding, next)
-    assert.equal(body.applied.sessions, 1, 'exactly one blank session is retargeted')
+    assert.equal(body.applied.sessions, 2, 'both blank sessions are retargeted')
     assert.deepEqual(carried.selected, [next], 'the session carrying the previous default moves to the new one')
-    assert.equal(switched.selected.length, 0, 'a user-switched session keeps its choice')
+    assert.deepEqual(staleBlank.selected, [next], 'a stale blank session also follows the workspace default')
     assert.equal(started.selected.length, 0, 'a started session keeps its choice')
     liveAgents.length = 0
   }
-  console.log('ok 8 - changing the default retargets only blank sessions carrying the previous default')
+  console.log('ok 8 - changing the default retargets every blank session in the workspace')
 
   /* 9. 清除绑定：删除记录并落盘。 */
   {

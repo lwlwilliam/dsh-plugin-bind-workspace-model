@@ -5,7 +5,7 @@
 
 - 绑定是**按工作区**的，工作区之间互不影响，可以为不同工作区配不同的默认模型。
 - 主要作用于**新会话**；有对话历史的会话不会被追溯修改。
-- 在某个会话里临时切换模型只影响那个会话，**不会**改写工作区默认值。
+- 在某个会话里切换模型或推理强度，会同步为该工作区的默认值；之后这个工作区的新会话沿用新的选择。
 - 清空某工作区的默认值后，之后新建的会话回到**全局默认模型**。
 
 包名：`@local/dsh-plugin-bind-workspace-model`。`@local/` 是本地占位 scope（不发布到 npm
@@ -20,9 +20,10 @@ registry），安装走下面的 Release `.tgz` 或 GitHub 仓库两种方式。
 之后该工作区新建的会话就会以这个选择开始。具体语义：
 
 - **生效时机是会话创建时**：新会话在发出第一轮请求前套用工作区默认值；有对话历史的会话不受影响。
-- **保存时同步空白会话**：该工作区里已经打开、但还没开始对话且没手动切过模型的空白会话，会一并
-  切到新默认值；手动切过模型的空白会话保持不动。
-- **会话内切换只影响该会话**：在会话里换模型不会回写工作区默认值，也不会影响同工作区的其它会话。
+- **保存时同步空白会话**：该工作区里已经打开、但还没开始对话的空白会话会一并切到新默认值；
+  已经开始对话或已有历史的会话保持不动。
+- **会话内切换会更新工作区默认值**：在会话里换模型或推理强度后，该工作区之后新建的会话沿用这份选择；
+  已经打开的其它会话不会被追溯修改。
 - **清空绑定**：在工作区菜单里清空默认模型后，之后新建的会话恢复使用全局默认模型；已经打开的
   空白会话不会被强制改回。
 - **删除/重建工作区**：删除工作区后，它的默认模型不再生效，并在下一次保存绑定或清空时从数据文件里
@@ -110,10 +111,10 @@ Plugins 页面的安装框。代价是每次安装/升级都走 git 拉取，版
 
 ## 已知限制 / Known limits
 
-- 绑定在**会话创建时**应用；有对话历史的会话不会被追溯修改（空白会话的同步规则见上面的“保存时
-  同步空白会话”）。
+- 绑定在**会话创建时**应用；复用旧空白会话作为“新会话”时也会重新套用工作区默认值；有对话历史
+  的会话不会被追溯修改（空白会话的同步规则见上面的“保存时同步空白会话”）。
 - 只对普通顶层会话生效，智能体团队/子代理等派生会话不使用工作区默认值。
-- 会话内切换模型只对那个会话有效，不会同步到工作区默认值——这是有意为之。
+- 会话内切换模型或推理强度会同步为工作区默认值；已经打开的其它会话不会被追溯修改。
 - “默认模型”列表里的候选来自**当前挂载的 provider 与模型目录**（不检查凭据）；运行中增删
   provider / 模型后列表随之变化；无法列出模型的 provider 会作为目录里的失败项单独标出，不影响
   其它 provider。
@@ -164,8 +165,9 @@ reasoning effort. New sessions created in that workspace start on that selection
 history are left untouched.
 
 - Set it from the workspace row's **...** menu → **默认模型 / Default model**.
-- Switching the model inside a session only affects that session; it never overwrites the workspace
-  default. Clearing the workspace default restores the global default for sessions created afterwards.
+- Switching the model or reasoning effort inside a session updates the workspace default, so later
+  sessions in that workspace start with the same choice. Clearing the workspace default restores the
+  global default for sessions created afterwards.
 - Bindings live in `$DSH_HOME/workspace-default-model/bindings.json` on the Host. Deleting that file
   clears all bindings; uninstalling the plugin does **not** remove it.
 

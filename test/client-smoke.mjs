@@ -245,7 +245,14 @@ const stateResponse = {
           {
             id: 'deepseek-v4.1-flash',
             name: 'DeepSeek V4.1 Flash',
-            reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' },
+            reasoning: {
+              efforts: [
+                { id: 'low', name: 'Low' },
+                { id: 'high', name: 'High' },
+                { id: 'max', name: 'Max' },
+              ],
+              defaultEffort: 'low',
+            },
           },
           { id: 'glm-5.3', name: 'GLM-5.3' },
         ],
@@ -270,7 +277,13 @@ let unbound = false
 
 async function fetchMock(input, init = {}) {
   const url = String(input)
-  fetchCalls.push({ url, method: init.method ?? 'GET' })
+  let json = null
+  try {
+    json = typeof init.body === 'string' ? JSON.parse(init.body) : null
+  } catch {
+    /* 非 JSON 请求体 */
+  }
+  fetchCalls.push({ url, method: init.method ?? 'GET', json })
   const state = unbound
     ? { ...stateResponse, binding: null, bindingName: null, bindingProviderName: null }
     : stateResponse
@@ -467,5 +480,37 @@ console.log('ok 6 - search matches provider names and model names')
 assert.deepEqual(await menu.resolve(null, new AbortController().signal), [])
 assert.deepEqual(await menu.resolve({ workspaceId: 'ws-1', displayTitle: 'Demo' }, new AbortController().signal), [])
 console.log('ok 7 - menu declines malformed targets')
+
+/* 8. 在推理强度子菜单里点 Max 时，保存请求必须携带 reasoningEffort。 */
+{
+  bound[0].run()
+  const tree = await mount(Dialog)
+  const selectedModel = findNode(
+    tree,
+    (node) => node.props?.role === 'menuitemradio' && node.props?.['aria-checked'] === true,
+  )
+  assert.ok(selectedModel !== null, 'current model row is present')
+  selectedModel.props.onClick()
+  const pane = await flush(Dialog)
+  const maxRow = findNode(
+    pane,
+    (node) => node.props?.role === 'menuitemradio' && collectText(node).join('') === 'Max',
+  )
+  assert.ok(maxRow !== null, 'Max effort row is present')
+  maxRow.props.onClick()
+  await tick()
+  await tick()
+  const writes = fetchCalls.filter((call) => call.url.includes('/binding') && call.method === 'POST')
+  assert.ok(writes.length > 0, 'choosing an effort sends a binding request')
+  assert.deepEqual(
+    writes.at(-1).json,
+    {
+      path: '/work/demo',
+      selection: { provider: 'opencode-go', model: 'deepseek-v4.1-flash', reasoningEffort: 'max' },
+    },
+    'the binding request persists the chosen reasoning effort',
+  )
+}
+console.log('ok 8 - choosing a reasoning effort persists it in the workspace binding')
 
 console.log('\nclient-smoke: all checks passed')

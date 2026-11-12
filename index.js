@@ -7,9 +7,10 @@
  * `model/selection`，于是新会话默认使用它。
  *
  * 语义边界：
- * - 只影响“新建的、还没有任何模型选择的、未开始的会话”；
+ * - 创建时只影响“新建的、还没有任何模型选择的、未开始的会话”；
  *   已有历史或用户已主动切换过模型的会话一律不动。
- * - 在会话里切换模型只作用于该会话，永远不会回写工作区默认值。
+ * - 在会话里切换模型或推理强度会回写当前工作区的默认值，
+ *   之后该工作区的新会话沿用这份选择。
  *
  * 本模块必须保持自包含：从已安装的 bundle 位置只能解析 Node 内置模块，
  * 因此这里不得出现任何 `@deepseek-ai/*` 导入；宿主服务一律通过
@@ -59,7 +60,7 @@ const MAX_BODY_BYTES = 64 * 1024
  */
 export function apply(ctx, config = {}) {
   const runtime = createRuntime(ctx, resolveConfig(config))
-  ctx.effect(() => runtime.installAgentHook(), `${PLUGIN_ID}: workspace default model`)
+  ctx.effect(() => runtime.installHooks(), `${PLUGIN_ID}: workspace default model`)
   ctx.inject(['connection'], (child) => {
     for (const route of runtime.routes) {
       child.effect(() => runtime.registerRoute(route), `${PLUGIN_ID}: ${route.path}`)
@@ -594,14 +595,20 @@ function createRuntime(ctx, config) {
   }
 
   /**
-   * 刚创建的会话是否应该套用工作区默认值。
+   * 刚创建或重新打开的会话是否应该套用工作区默认值。
+   *
+   * 新会话（source === 'startup'）仍尊重创建方显式指定的路由；但空白会话
+   * 被 DSH 当作“新会话”重新打开时（source === 'resume'），工作区默认值应当
+   * 生效，否则旧空白会话会一直卡在历史选择上。
    * @param {object} agent - Agent。
+   * @param {string|undefined} source - DSH 的会话创建来源。
    * @returns {boolean}
    */
-  function shouldApplyOnCreate(agent) {
+  function shouldApplyOnCreate(agent, source) {
     const session = agent?.session
     if (!isOrdinaryTopLevelSession(session)) return false
     if (!isBlankSession(session)) return false
+    if (source === 'resume') return true
     if (hasExplicitRoute(agent)) return false
     const recorded = recordedSelection(session)
     if (recorded.known && recorded.next !== null) return false
@@ -610,31 +617,27 @@ function createRuntime(ctx, config) {
 
   /**
    * 保存新默认值时，是否应该把还没开始的会话一并改到新默认值。
-   * 只改“空会话，且其已记录的选择为空或正是上一份工作区默认值”的会话，
-   * 用户自己切换过的空会话保持不动。
+   *
+   * 空白会话里可能带着旧默认值、旧的无推理强度选择，甚至上一轮测试遗留的
+   * 选择；DSH 的“新会话”按钮会复用这些空白会话。为了让菜单里保存的工作区
+   * 默认值真正可见，保存时统一把该工作区所有未开始的顶层会话切过去。
+   * 有历史或已经开始回合的会话仍然不动。
    * @param {object} agent - Agent。
-   * @param {object|null} previous - 保存前的绑定。
    * @returns {boolean}
    */
-  function shouldRetargetLiveSession(agent, previous) {
+  function shouldRetargetLiveSession(agent) {
     const session = agent?.session
     if (!isOrdinaryTopLevelSession(session)) return false
-    if (!isBlankSession(session)) return false
-    if (hasExplicitRoute(agent)) return false
-    const recorded = recordedSelection(session)
-    if (!recorded.known) return true
-    if (recorded.next === null || recorded.next === undefined) return true
-    return previous !== null && sameSelection(recorded.next, previous)
+    return isBlankSession(session)
   }
 
   /**
    * 对某个工作区的活 Agent 应用一份选择。
    * @param {string} key - 绑定键（工作区 id 或 path:<路径>）。
    * @param {object} selection - 要应用的选择。
-   * @param {object|null} previous - 该工作区上一份绑定。
    * @param {'create'|'retarget'} mode - 创建时应用还是保存后重定向。
    */
-  async function applyToLiveSessions(key, selection, previous, mode) {
+  async function applyToLiveSessions(key, selection, mode) {
     const registry = ctx.get('agents')
     if (registry === undefined || typeof registry.list !== 'function') return 0
     let applied = 0
@@ -646,7 +649,7 @@ function createRuntime(ctx, config) {
         const workspace = await resolveWorkspace(cwd)
         const canonical = workspace?.path ?? cwd
         if (bindingKey(workspace, canonical) !== key) continue
-        const eligible = mode === 'create' ? shouldApplyOnCreate(agent) : shouldRetargetLiveSession(agent, previous)
+        const eligible = mode === 'create' ? shouldApplyOnCreate(agent) : shouldRetargetLiveSession(agent)
         if (!eligible) continue
         const model = agent.model
         if (model === undefined || typeof model?.select !== 'function') continue
@@ -668,7 +671,7 @@ function createRuntime(ctx, config) {
     try {
       const agent = payload?.agent
       if (agent === undefined || agent === null) return
-      if (!shouldApplyOnCreate(agent)) return
+      if (!shouldApplyOnCreate(agent, payload?.source)) return
       const cwd = agent.session?.header?.cwd
       if (typeof cwd !== 'string' || cwd === '') return
       const binding = await bindingForPath(cwd)
@@ -682,15 +685,43 @@ function createRuntime(ctx, config) {
     }
   }
 
-  /** 注册会话创建钩子。 */
-  function installAgentHook() {
-    const dispose = ctx.on('agent/created', (payload) => handleAgentCreated(payload))
+  /**
+   * `session/event` 钩子：把用户在会话里选中的模型/推理强度回写为工作区默认值。
+   * 插件自己套用工作区默认值、或保存后重定向空白会话时也会产生
+   * `model/selection`；与当前绑定相等时直接跳过，避免重复写盘。
+   * @param {object} session - 产生事件的会话。
+   * @param {{type?: string, data?: unknown}} event - 会话事件。
+   */
+  async function handleSessionEvent(session, event) {
+    try {
+      if (event?.type !== 'model/selection') return
+      if (!isOrdinaryTopLevelSession(session)) return
+      const selection = normalizeSelection(event.data)
+      if (selection === null) return
+      const cwd = session?.header?.cwd
+      if (typeof cwd !== 'string' || cwd === '') return
+      const binding = await bindingForPath(cwd)
+      if (sameSelection(binding.selection, selection)) return
+      await mutateBinding(binding.key, binding.canonical, selection)
+    } catch (error) {
+      report('session-event', error)
+    }
+  }
+
+  /** 注册会话创建与模型切换钩子。 */
+  function installHooks() {
+    const disposers = [
+      ctx.on('agent/created', (payload) => handleAgentCreated(payload)),
+      ctx.on('session/event', (session, event) => handleSessionEvent(session, event)),
+    ]
     return () => {
-      try {
-        const result = dispose?.()
-        if (result !== null && typeof result?.then === 'function') result.catch(() => {})
-      } catch {
-        /* 卸载期释放失败不影响宿主 */
+      for (const dispose of disposers) {
+        try {
+          const result = dispose?.()
+          if (result !== null && typeof result?.then === 'function') result.catch(() => {})
+        } catch {
+          /* 卸载期释放失败不影响宿主 */
+        }
       }
     }
   }
@@ -831,7 +862,6 @@ function createRuntime(ctx, config) {
       return errorResponse(400, 'invalid-path', 'path must be an absolute directory path')
     }
     const binding = await bindingForPath(requested)
-    const previous = binding.selection
     let selection = null
     if (body.selection !== null && body.selection !== undefined) {
       const verdict = await validateSelection(body.selection)
@@ -848,7 +878,7 @@ function createRuntime(ctx, config) {
     }
     let applied = 0
     if (selection !== null) {
-      applied = await applyToLiveSessions(binding.key, selection, previous, 'retarget')
+      applied = await applyToLiveSessions(binding.key, selection, 'retarget')
     }
     return jsonResponse({ ok: true, path: binding.canonical, binding: selection, applied: { sessions: applied } })
   }
@@ -859,8 +889,9 @@ function createRuntime(ctx, config) {
       { path: ROUTE_BINDING, methods: ['POST'], handler: handleBindingRequest },
     ],
     registerRoute,
-    installAgentHook,
+    installHooks,
     handleAgentCreated,
+    handleSessionEvent,
     writeDirectoryMarker,
   }
 }
