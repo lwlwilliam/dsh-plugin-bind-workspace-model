@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------------
     const en = {
       'menu.label': 'Default model',
-      'menu.labelWithModel': 'Default model · {model}',
+      'menu.labelWithProvider': 'Default model · {provider}',
       'dialog.currentDefault': 'Current default: {provider} · {model}',
       'dialog.title': 'Workspace default model',
       'dialog.description': 'New sessions in this workspace start on this model.',
@@ -50,7 +50,7 @@ window.__ModuleLoader__.load({
     }
     const zh = {
       'menu.label': '默认模型',
-      'menu.labelWithModel': '默认模型 · {model}',
+      'menu.labelWithProvider': '默认模型 · {provider}',
       'dialog.currentDefault': '当前默认：{provider} · {model}',
       'dialog.title': '工作区默认模型',
       'dialog.description': '该工作区里新建的会话默认使用这个模型。',
@@ -969,13 +969,14 @@ window.__ModuleLoader__.load({
                   const body = await response.json().catch(() => null)
                   const binding = body !== null && body.ok === true ? body.binding : null
                   if (binding !== null && binding !== undefined) {
-                    const model =
-                      typeof body.bindingName === 'string' && body.bindingName !== ''
-                        ? body.bindingName
-                        : binding.model
-                    // 共享菜单只接受单行纯文本：带上提供方会把弹出菜单明显撑宽，
-                    // 所以菜单只留模型名，提供方放进对话框的“当前默认”说明里。
-                    label = translate('menu.labelWithModel', { model })
+                    // 共享菜单的动作只有单行纯文本 label，没有 tooltip 字段；
+                    // 菜单里放较短的提供方名称，具体模型名在对话框顶部的
+                    // “当前默认：<provider> · <model>”一行里展示。
+                    const provider =
+                      typeof body.bindingProviderName === 'string' && body.bindingProviderName !== ''
+                        ? body.bindingProviderName
+                        : binding.provider
+                    label = translate('menu.labelWithProvider', { provider })
                   }
                 } catch {
                   /* 标签降级为纯文字，不影响菜单打开 */
