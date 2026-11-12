@@ -192,8 +192,8 @@ api.apply(ctx)
 
 /* 1. locale 字典。 */
 assert.deepEqual(registered.localeRegistrations, [NS], 'registers its locale namespace')
-assert.ok(registered.dictionaries.get(NS)?.en?.['menu.label'] === 'Default model', 'carries English copy')
-assert.ok(registered.dictionaries.get(NS)?.zh?.['menu.label'] === '默认模型', 'carries Chinese copy')
+assert.ok(registered.dictionaries.get(NS)?.en?.['menu.choose'] === 'Choose default model', 'carries English copy')
+assert.ok(registered.dictionaries.get(NS)?.zh?.['menu.choose'] === '选择默认模型', 'carries Chinese copy')
 console.log('ok 1 - locale dictionaries registered')
 
 /* 2. 菜单行 / 浮层注册。 */
@@ -248,8 +248,8 @@ function collectText(node) {
   for (const child of node.children ?? []) collectText(child)
 }
 collectText(menuButton)
-assert.ok(menuLabels.includes('默认模型'), 'menu row is labelled 默认模型')
-assert.equal(typeof menuButton.props.title, 'string', 'hover title is present')
+assert.ok(menuLabels.includes('选择默认模型'), 'unset workspace is labelled 选择默认模型')
+assert.equal(menuButton.props.title, undefined, 'no hover tooltip on the row')
 menuButton.props.onClick()
 assert.equal(dismissed, true, 'clicking the row dismisses the menu')
 console.log('ok 4 - self-rendered menu row opens the dialog')
@@ -280,6 +280,7 @@ function findStyle(node) {
 const styleNode = findStyle(openTree)
 assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-layer-2'), 'dialog carries its stylesheet')
 assert.ok(styleNode.includes('wbm-menuItem'), 'stylesheet also covers the workspace menu row')
+assert.ok(styleNode.includes('wbm-menuProvider'), 'stylesheet styles the provider separately')
 console.log('ok 5 - open dialog renders the modal tree with its stylesheet')
 
 /* 6. 空/异常 target 时菜单行不渲染（防御式）。 */

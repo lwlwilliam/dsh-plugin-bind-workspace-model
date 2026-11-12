@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // 本地化文案。扁平键，所有可见字符串都经过 `t`。
     // ---------------------------------------------------------------------
     const en = {
-      'menu.label': 'Default model',
+      'menu.choose': 'Choose default model',
       'dialog.currentDefault': 'Current default: {provider} · {model}',
       'dialog.title': 'Workspace default model',
       'dialog.following': 'No workspace default; new sessions follow the global default ({model}).',
@@ -44,7 +44,7 @@ window.__ModuleLoader__.load({
       'provider.account': 'DeepSeek Account',
     }
     const zh = {
-      'menu.label': '默认模型',
+      'menu.choose': '选择默认模型',
       'dialog.currentDefault': '当前默认：{provider} · {model}',
       'dialog.title': '工作区默认模型',
       'dialog.following': '未设置工作区默认模型；新建会话跟随全局默认（{model}）。',
@@ -141,8 +141,10 @@ window.__ModuleLoader__.load({
 .wbm-menuItem:focus-visible{background:var(--dsw-alias-interactive-bg-hover);outline:none}
 .wbm-menuIcon{flex:none;display:inline-flex;width:14px;height:14px;align-items:center;justify-content:center;color:var(--dsw-alias-menu-icon)}
 .wbm-menuIcon svg{width:14px;height:14px}
-.wbm-menuLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wbm-menuProvider{flex:none;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.wbm-menuLabel{flex:1;min-width:0;display:flex;align-items:baseline;overflow:hidden;white-space:nowrap}
+.wbm-menuProvider{flex:none;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.wbm-menuDot{flex:none;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.wbm-menuModel{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 官方 Button */
 .wbm-footer{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:20px 24px 24px}
 .wbm-footerNote{flex:1;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -954,7 +956,6 @@ window.__ModuleLoader__.load({
       }, [path])
 
       if (path === '') return null
-      const title = hint === null ? t('menu.label') : `${hint.model}（${hint.provider}）`
       return h(
         'div',
         { role: 'presentation' },
@@ -965,7 +966,6 @@ window.__ModuleLoader__.load({
             type: 'button',
             role: 'menuitem',
             className: 'wbm-menuItem',
-            title,
             onClick: () => {
               try {
                 if (typeof dismiss === 'function') dismiss()
@@ -980,8 +980,13 @@ window.__ModuleLoader__.load({
             },
           },
           h('span', { className: 'wbm-menuIcon', 'aria-hidden': 'true' }, h(WorkspaceDefaultModelIcon, null)),
-          h('span', { className: 'wbm-menuLabel' }, hint === null ? t('menu.label') : hint.model),
-          hint === null ? null : h('span', { className: 'wbm-menuProvider' }, `（${hint.provider}）`),
+          h(
+            'span',
+            { className: 'wbm-menuLabel' },
+            hint === null ? t('menu.choose') : h('span', { className: 'wbm-menuProvider' }, hint.provider),
+            hint === null ? null : h('span', { className: 'wbm-menuDot' }, ' · '),
+            hint === null ? null : h('span', { className: 'wbm-menuModel' }, hint.model),
+          ),
         ),
       )
     }
