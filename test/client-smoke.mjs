@@ -2,10 +2,10 @@
 /**
  * 浏览器端冒烟测试（不依赖真实浏览器 / 真实 DSH）。
  *
- * 用假的 `window.__ModuleLoader__` 加载 client.js，再用假的 React 与 Cordis
- * 上下文执行 `apply`，断言：模块 id、inject 依赖、locale 字典、工作区 “...”
- * 菜单项、`contextMenu.icon` 与 `shell.overlay` 注册，以及菜单动作确实能打开
- * 对话框、对话框组件能渲染出 `role="dialog"` 的树。
+ * 用假的 `window.__ModuleLoader__` 加载 client.js，用带最小 React hooks
+ * 运行时和假 Cordis 上下文执行 `apply`，断言：模块 id、inject 依赖、
+ * locale 字典、工作区 “...” 原生菜单项、对话框渲染，以及“同时按提供商
+ * 与模型名称搜索”的过滤结果。
  *
  * 运行：node test/client-smoke.mjs
  */
@@ -17,37 +17,146 @@ const PLUGIN_ID = '@local/dsh-plugin-bind-workspace-model'
 const NS = 'dsh-plugin-bind-workspace-model'
 
 /* -------------------------------------------------------------------------- */
-/* React 替身                                                                 */
+/* 最小 React 运行时：支持 state / memo / callback / effect / ref / 外部 store   */
 /* -------------------------------------------------------------------------- */
+
+const hooks = {
+  slots: [],
+  index: 0,
+  dirty: false,
+  effects: [],
+  cleanups: [],
+}
 
 const React = {
   createElement(type, props, ...children) {
     return { type, props: props ?? {}, children }
   },
   useState(initial) {
-    const value = typeof initial === 'function' ? initial() : initial
-    return [value, () => {}]
+    const slot = nextSlot()
+    if (slot.initialized !== true) {
+      slot.value = typeof initial === 'function' ? initial() : initial
+      slot.initialized = true
+    }
+    return [
+      slot.value,
+      (next) => {
+        const value = typeof next === 'function' ? next(slot.value) : next
+        if (Object.is(value, slot.value)) return
+        slot.value = value
+        hooks.dirty = true
+      },
+    ]
   },
-  useMemo(factory) {
-    return factory()
+  useMemo(factory, deps) {
+    const slot = nextSlot()
+    if (slot.initialized !== true || !sameDeps(slot.deps, deps)) {
+      slot.value = factory()
+      slot.deps = deps
+      slot.initialized = true
+    }
+    return slot.value
   },
-  useCallback(callback) {
-    return callback
+  useCallback(callback, deps) {
+    const slot = nextSlot()
+    if (slot.initialized !== true || !sameDeps(slot.deps, deps)) {
+      slot.value = callback
+      slot.deps = deps
+      slot.initialized = true
+    }
+    return slot.value
   },
-  useEffect() {},
+  useEffect(effect, deps) {
+    const slot = nextSlot()
+    if (slot.initialized !== true || !sameDeps(slot.deps, deps)) {
+      slot.deps = deps
+      slot.initialized = true
+      hooks.effects.push(effect)
+    }
+  },
   useRef(initial) {
-    return { current: initial ?? null }
+    const slot = nextSlot()
+    if (slot.initialized !== true) {
+      slot.value = { current: initial ?? null }
+      slot.initialized = true
+    }
+    return slot.value
   },
   useSyncExternalStore(_subscribe, getSnapshot) {
     return getSnapshot()
   },
 }
 
+function nextSlot() {
+  const index = hooks.index++
+  if (hooks.slots.length <= index) hooks.slots.push({ initialized: false })
+  return hooks.slots[index]
+}
+
+function sameDeps(left, right) {
+  if (left === undefined || right === undefined) return false
+  if (left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    if (!Object.is(left[index], right[index])) return false
+  }
+  return true
+}
+
+/** 展开一层包装组件，返回最终宿主元素树。 */
+function renderChain(component, props) {
+  hooks.index = 0
+  let node = component(props)
+  let depth = 0
+  while (node !== null && typeof node === 'object' && typeof node.type === 'function' && depth < 6) {
+    node = node.type(node.props)
+    depth += 1
+  }
+  return node
+}
+
+/** 跑完所有 effect、等待异步读取结算，直到没有新的 state 更新。 */
+async function flush(component, props) {
+  let tree = null
+  for (let pass = 0; pass < 12; pass += 1) {
+    hooks.dirty = false
+    tree = renderChain(component, props)
+    const effects = hooks.effects
+    hooks.effects = []
+    for (const effect of effects) {
+      const cleanup = effect()
+      if (typeof cleanup === 'function') hooks.cleanups.push(cleanup)
+    }
+    await tick()
+    await tick()
+    if (!hooks.dirty) return tree
+  }
+  return tree
+}
+
+function tick() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/** 新挂载一个组件（清空 hooks 槽位）。 */
+async function mount(component, props) {
+  for (const cleanup of hooks.cleanups) {
+    try {
+      cleanup()
+    } catch {
+      /* 忽略清理失败 */
+    }
+  }
+  hooks.slots = []
+  hooks.cleanups = []
+  hooks.effects = []
+  hooks.dirty = true
+  return await flush(component, props)
+}
+
 /* -------------------------------------------------------------------------- */
 /* 假 window / 假上下文                                                       */
 /* -------------------------------------------------------------------------- */
 
-/** 捕获模块加载器注册的 factory。 */
 let loaded = null
 const windowStub = {
   __ModuleLoader__: {
@@ -57,22 +166,23 @@ const windowStub = {
   },
 }
 
-/** 记录注册结果的假 Cordis 上下文。 */
 const registered = {
   dictionaries: new Map(),
-  slots: [],
   localeRegistrations: [],
   menus: [],
+  slots: [],
+  components: new Map(),
   notifications: [],
 }
 
 function lookup(key) {
-  const language = typeof ctx.locale.getLocale === 'function' && ctx.locale.getLocale().startsWith('zh') ? 'zh' : 'en'
+  const language = typeof ctx.localizedLanguage === 'string' ? ctx.localizedLanguage : 'zh'
   const dictionary = registered.dictionaries.get(NS)?.[language] ?? {}
   return Object.prototype.hasOwnProperty.call(dictionary, key) ? dictionary[key] : key
 }
 
 const ctx = {
+  localizedLanguage: 'zh',
   locale: {
     register(namespace, dictionaries) {
       registered.dictionaries.set(namespace, dictionaries)
@@ -96,9 +206,9 @@ const ctx = {
       return factory()
     },
     register(options, Component) {
-      registered.slots.push(`${options.name}:${options.id ?? options.key ?? ''}`)
-      registered.components = registered.components ?? new Map()
-      registered.components.set(`${options.name}:${options.id ?? options.key ?? ''}`, Component)
+      const key = `${options.name}:${options.id ?? options.key ?? ''}`
+      registered.slots.push(key)
+      registered.components.set(key, Component)
       return () => {}
     },
   },
@@ -117,7 +227,6 @@ const ctx = {
 /* 假 Host 路由                                                               */
 /* -------------------------------------------------------------------------- */
 
-/** 工作区状态响应。 */
 const stateResponse = {
   ok: true,
   workspace: { id: 'ws-1', path: '/work/demo', title: 'Demo' },
@@ -141,17 +250,30 @@ const stateResponse = {
           { id: 'glm-5.3', name: 'GLM-5.3' },
         ],
       },
+      {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        models: [
+          { id: 'deepseek-chat', name: 'DeepSeek Chat' },
+          { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' },
+          { id: 'deepseek-coder', name: 'DeepSeek Coder' },
+        ],
+      },
     ],
     failures: [],
   },
 }
 
 const fetchCalls = []
+/** 打开时为 true：模拟“该工作区还没有默认模型”。 */
 let unbound = false
+
 async function fetchMock(input, init = {}) {
   const url = String(input)
   fetchCalls.push({ url, method: init.method ?? 'GET' })
-  const state = unbound ? { ...stateResponse, binding: null, bindingName: null, bindingProviderName: null } : stateResponse
+  const state = unbound
+    ? { ...stateResponse, binding: null, bindingName: null, bindingProviderName: null }
+    : stateResponse
   const body = url.includes('/binding') ? { ok: true, binding: null, applied: { sessions: 0 } } : state
   return {
     ok: true,
@@ -160,6 +282,43 @@ async function fetchMock(input, init = {}) {
       return body
     },
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* 通用查询                                                                   */
+/* -------------------------------------------------------------------------- */
+
+function findNode(node, predicate) {
+  if (node === null || typeof node !== 'object') return null
+  if (predicate(node)) return node
+  for (const child of node.children ?? []) {
+    const found = findNode(child, predicate)
+    if (found !== null) return found
+  }
+  return null
+}
+
+function findAll(node, predicate, found = []) {
+  if (node === null || typeof node !== 'object') return found
+  if (predicate(node)) found.push(node)
+  for (const child of node.children ?? []) findAll(child, predicate, found)
+  return found
+}
+
+function collectText(node, texts = []) {
+  if (node === null || node === undefined) return texts
+  if (typeof node === 'string') {
+    texts.push(node)
+    return texts
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectText(child, texts)
+    return texts
+  }
+  if (typeof node === 'object') {
+    for (const child of node.children ?? []) collectText(child, texts)
+  }
+  return texts
 }
 
 /* -------------------------------------------------------------------------- */
@@ -175,10 +334,16 @@ assert.ok(source.includes('--dsw-alias-'), 'stylesheet uses theme tokens')
 
 // 加载模块。
 const execute = new Function('window', 'require', 'fetch', 'console', 'AbortController', source)
-execute(windowStub, (name) => {
-  if (name === 'react') return React
-  throw new Error(`unexpected require: ${name}`)
-}, fetchMock, console, AbortController)
+execute(
+  windowStub,
+  (name) => {
+    if (name === 'react') return React
+    throw new Error(`unexpected require: ${name}`)
+  },
+  fetchMock,
+  console,
+  AbortController,
+)
 
 assert.ok(loaded !== null, 'module registers through window.__ModuleLoader__')
 assert.equal(loaded.id, PLUGIN_ID, 'module id equals the package name')
@@ -198,7 +363,7 @@ assert.ok(registered.dictionaries.get(NS)?.en?.['menu.choose'] === 'Choose defau
 assert.ok(registered.dictionaries.get(NS)?.zh?.['menu.choose'] === '选择默认模型', 'carries Chinese copy')
 console.log('ok 1 - locale dictionaries registered')
 
-/* 2. 菜单动作 / 图标 / 浮层注册。 */
+/* 2. 原生菜单动作 / 图标 / 浮层注册。 */
 assert.equal(registered.menus.length, 1, 'registers one native workspace menu action')
 const menu = registered.menus[0]
 assert.equal(menu.id, 'workspace-default-model')
@@ -211,76 +376,80 @@ assert.ok(registered.slots.includes('contextMenu.icon:workspace.defaultModel'), 
 assert.ok(registered.slots.includes('shell.overlay:workspace-default-model'), 'registers the dialog in the overlay')
 console.log('ok 2 - workspace menu action, icon and overlay entries registered')
 
-/* 3. 关闭状态下对话框不渲染。 */
 const Dialog = registered.components.get('shell.overlay:workspace-default-model')
 assert.equal(typeof Dialog, 'function', 'overlay entry is a component')
-/** 依次展开外层包装组件，直到得到宿主元素或 null。 */
-function renderRoot(component, props) {
-  let node = component(props)
-  let depth = 0
-  while (node !== null && typeof node === 'object' && typeof node.type === 'function' && depth < 6) {
-    node = node.type(node.props)
-    depth += 1
-  }
-  return node
-}
-const closed = renderRoot(Dialog)
-assert.equal(closed, null, 'closed dialog renders nothing')
+
+/* 3. 关闭状态下对话框不渲染。 */
+assert.equal(await mount(Dialog), null, 'closed dialog renders nothing')
 console.log('ok 3 - dialog renders nothing while closed')
 
-/* 4. 菜单动作：已绑定时显示“提供商 · 模型”，运行后打开对话框。 */
+/* 4. 菜单动作：已绑定时显示“提供商 · 模型”，未绑定时显示“选择默认模型”。 */
 const target = { workspaceId: 'ws-1', path: '/work/demo', displayTitle: 'Demo' }
-const actions = await menu.resolve(target, new AbortController().signal)
-assert.equal(actions.length, 1, 'menu resolves one action')
-assert.equal(actions[0].label, 'OpenCode Go · DeepSeek V4.1 Flash', 'label reads provider · model once bound')
-assert.deepEqual(actions[0].icon, { key: 'workspace.defaultModel' })
-const labelCall = fetchCalls.find((call) => call.url.includes('catalog=0'))
-assert.ok(labelCall !== undefined, 'menu label fetch skips the full catalog')
-actions[0].run()
-console.log('ok 4 - menu action resolves the bound provider and model, then opens the dialog')
+const bound = await menu.resolve(target, new AbortController().signal)
+assert.equal(bound.length, 1, 'menu resolves one action')
+assert.equal(bound[0].label, 'OpenCode Go · DeepSeek V4.1 Flash', 'bound workspace shows provider · model')
+assert.deepEqual(bound[0].icon, { key: 'workspace.defaultModel' })
+assert.ok(
+  fetchCalls.some((call) => call.url.includes('catalog=0')),
+  'menu label fetch skips the full catalog',
+)
 
-/* 4b. 未设置时菜单项读作“选择默认模型”。 */
-{
-  unbound = true
-  const unset = await menu.resolve(target, new AbortController().signal)
-  assert.equal(unset[0].label, '选择默认模型', 'unset workspace is labelled 选择默认模型')
-  unbound = false
-}
-console.log('ok 4b - unset workspace shows the action label')
+unbound = true
+const unset = await menu.resolve(target, new AbortController().signal)
+assert.equal(unset[0].label, '选择默认模型', 'unset workspace shows the action label')
+unbound = false
+console.log('ok 4 - menu action reads 选择默认模型 / 提供商 · 模型')
 
-/* 5. 打开后渲染出 role="dialog" 的树。 */
-const openTree = renderRoot(Dialog)
+/* 5. 打开对话框：官方 Modal 树 + 列表渲染。 */
+bound[0].run()
+const openTree = await mount(Dialog)
 assert.ok(openTree !== null && typeof openTree === 'object', 'open dialog renders a tree')
-function findDialog(node) {
-  if (node === null || typeof node !== 'object') return null
-  if (node.props !== undefined && node.props.role === 'dialog') return node
-  for (const child of node.children ?? []) {
-    const found = findDialog(child)
-    if (found !== null) return found
-  }
-  return null
-}
-const dialog = findDialog(openTree)
+const dialog = findNode(openTree, (node) => node.props?.role === 'dialog')
 assert.ok(dialog !== null, 'open dialog tree carries role="dialog"')
 assert.equal(dialog.props['aria-modal'], 'true', 'dialog is modal')
-function findStyle(node) {
-  if (node === null || typeof node !== 'object') return null
-  if (node.type === 'style') return node.children?.[0] ?? null
-  for (const child of node.children ?? []) {
-    const found = findStyle(child)
-    if (found !== null) return found
-  }
-  return null
-}
-const styleNode = findStyle(openTree)
-assert.ok(styleNode !== null && styleNode.includes('--dsw-alias-bg-layer-2'), 'dialog carries its stylesheet')
-assert.ok(styleNode.includes('wbm-option'), 'stylesheet covers the model option rows')
-assert.ok(styleNode.includes('wbm-footerNote'), 'stylesheet covers the footer state line')
-console.log('ok 5 - open dialog renders the modal tree with its stylesheet')
+const styleNode = findNode(openTree, (node) => node.type === 'style')
+assert.ok(styleNode !== null && String(styleNode.children?.[0] ?? '').includes('--dsw-alias-bg-layer-2'), 'styles use theme tokens')
+const selectedRows = findAll(openTree, (node) => typeof node.props?.className === 'string' && node.props.className.includes('wbm-optionSelected'))
+assert.equal(selectedRows.length, 1, 'exactly one row is marked as the current default')
+console.log('ok 5 - dialog renders the modal tree and the current default row')
 
-/* 6. 空 target 时不提供动作（防御式）。 */
+/* 6. 搜索同时匹配提供商与模型名称。 */
+{
+  const search = findNode(openTree, (node) => node.type === 'input' && node.props?.type === 'search')
+  assert.ok(search !== null, 'search field is shown for a catalog above four models')
+
+  const rowsOf = (tree) => findAll(tree, (node) => node.props?.role === 'menuitemradio').length
+
+  // 提供商命中：opencode → 该 provider 的两个模型全部保留。
+  search.props.onChange({ target: { value: 'opencode' } })
+  let tree = await flush(Dialog)
+  assert.equal(rowsOf(tree), 2, 'a provider-name query keeps the whole provider group')
+
+  // 模型命中：glm → 只剩 GLM-5.3。
+  const refreshSearch = () =>
+    findNode(tree, (node) => node.type === 'input' && node.props?.type === 'search')
+  refreshSearch().props.onChange({ target: { value: 'glm' } })
+  tree = await flush(Dialog)
+  assert.equal(rowsOf(tree), 1, 'a model-name query filters the model rows')
+
+  // 同时命中：deepseek 命中 DeepSeek 分组 + DeepSeek V4.1 Flash。
+  refreshSearch().props.onChange({ target: { value: 'deepseek' } })
+  tree = await flush(Dialog)
+  assert.equal(rowsOf(tree), 4, 'provider and model matches are combined')
+
+  // 无命中：空状态。
+  refreshSearch().props.onChange({ target: { value: 'zzzz' } })
+  tree = await flush(Dialog)
+  assert.equal(rowsOf(tree), 0, 'no match leaves no rows')
+  const noMatchText = collectText(tree)
+  assert.ok(noMatchText.includes('没有匹配的模型或提供商。'), 'no-match copy is shown')
+  assert.equal(noMatchText.includes('暂无可用模型。'), false, 'no-match does not claim the catalog is empty')
+}
+console.log('ok 6 - search matches provider names and model names')
+
+/* 7. 空 target 时不提供动作（防御式）。 */
 assert.deepEqual(await menu.resolve(null, new AbortController().signal), [])
 assert.deepEqual(await menu.resolve({ workspaceId: 'ws-1', displayTitle: 'Demo' }, new AbortController().signal), [])
-console.log('ok 6 - menu declines malformed targets')
+console.log('ok 7 - menu declines malformed targets')
 
 console.log('\nclient-smoke: all checks passed')

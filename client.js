@@ -28,8 +28,9 @@ window.__ModuleLoader__.load({
       'dialog.following': 'No workspace default; new sessions follow the global default ({model}).',
       'dialog.loading': 'Loading models…',
       'dialog.empty': 'No models available. Add a provider or its credentials in Settings → Models.',
+      'dialog.noMatch': 'No matching models or providers.',
       'dialog.failures': '{count} provider(s) could not list models.',
-      'dialog.search': 'Search models',
+      'dialog.search': 'Search models or providers',
       'dialog.clearSearch': 'Clear search',
       'dialog.effort.title': 'Reasoning effort for {model}',
       'dialog.effort.auto': 'Auto (provider default)',
@@ -52,8 +53,9 @@ window.__ModuleLoader__.load({
       'dialog.following': '未设置工作区默认模型；新建会话跟随全局默认（{model}）。',
       'dialog.loading': '正在加载模型…',
       'dialog.empty': '暂无可用模型。请在 设置 → 模型 中添加提供方或凭据。',
+      'dialog.noMatch': '没有匹配的模型或提供商。',
       'dialog.failures': '有 {count} 个提供方无法列出模型。',
-      'dialog.search': '搜索模型',
+      'dialog.search': '搜索模型或提供商',
       'dialog.clearSearch': '清除搜索',
       'dialog.effort.title': '推理强度：{model}',
       'dialog.effort.auto': 'Auto（跟随提供方默认）',
@@ -427,15 +429,22 @@ window.__ModuleLoader__.load({
       }, [open, target === null ? '' : target.path, t])
 
       const data = state.data
+      // 搜索同时匹配“提供商名称”和“模型名称”：
+      // - 命中提供商 → 该分组下所有模型都保留（相当于按提供商过滤）；
+      // - 否则按模型名过滤/排序，空分组隐藏。
       const groups = React.useMemo(() => {
         if (data === null || data.catalog === null || !Array.isArray(data.catalog.groups)) return []
+        const hasQuery = query.trim() !== ''
         return orderGroups(data.catalog.groups)
-          .map((group) => ({
-            ...group,
-            models: rankModels(Array.isArray(group.models) ? group.models : [], query),
-          }))
+          .map((group) => {
+            const models = Array.isArray(group.models) ? group.models : []
+            const providerName = group.id === 'deepseek-account' ? t('provider.account') : group.name
+            const providerHit =
+              hasQuery && (fuzzyMatch(providerName, query) || fuzzyMatch(group.id, query))
+            return { ...group, models: providerHit ? models : rankModels(models, query) }
+          })
           .filter((group) => group.models.length > 0)
-      }, [data, query])
+      }, [data, query, t])
 
       const choices = React.useMemo(() => {
         const list = []
@@ -634,6 +643,8 @@ window.__ModuleLoader__.load({
         list = h('div', { className: 'wbm-empty' }, state.error ?? t('error.load'))
       } else if (data !== null && totalModels === 0) {
         list = h('div', { className: 'wbm-empty' }, t('dialog.empty'))
+      } else if (pane === null && groups.length === 0) {
+        list = h('div', { className: 'wbm-empty' }, t('dialog.noMatch'))
       } else if (pane !== null) {
         const efforts = effortChoices.map((row, rowIndex) => {
           const selected = effortSelected(row.effort)
